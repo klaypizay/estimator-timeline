@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="JobBook"/>
+<meta name="theme-color" content="#1A1510"/>
+<title>JobBook — Estimator + Timeline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;1,300;1,400&family=Azeret+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#F5F1EB;font-family:'Newsreader','Georgia',serif;overscroll-behavior:none;}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:48px;}
+  input[type=range]{-webkit-appearance:none;height:5px;border-radius:3px;outline:none;width:100%;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid #F5F1EB;box-shadow:0 1px 4px rgba(0,0,0,0.2);background:#1A1510;}
+  input[type=text],input[type=number],textarea{background:#EDE9E2;border:1px solid #D5CFC4;color:#1A1510;border-radius:6px;padding:10px 12px;font-family:'Newsreader',serif;font-size:15px;outline:none;width:100%;}
+  input[type=text]:focus,input[type=number]:focus,textarea:focus{border-color:#1A1510;}
+  textarea{resize:vertical;line-height:1.4;}
+  .set-labelrow{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
+  .info-btn{width:16px;height:16px;flex-shrink:0;border-radius:50%;border:1px solid #B7AE9F;background:transparent;color:#8A847A;font-family:'Azeret Mono',monospace;font-size:10px;font-style:italic;line-height:1;cursor:pointer;padding:0;}
+  .info-btn.on{background:#1A1510;color:#F5F1EB;border-color:#1A1510;}
+  .set-desc{font-family:'Newsreader',serif;font-size:13px;line-height:1.45;color:#6B6560;background:#EDE9E2;border-left:2px solid #C8C2B8;border-radius:0 6px 6px 0;padding:8px 11px;margin-bottom:8px;}
+  .mono{font-family:'Azeret Mono','Courier New',monospace;}
+  .eyebrow{font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8A847A;margin-bottom:6px;}
+  .headline{font-size:28px;font-weight:300;line-height:1.15;color:#1A1510;}
+  .tabbar{display:flex;gap:8px;padding:16px 16px 4px;align-items:center;}
+  .tab-btn{flex:1;font-family:'Azeret Mono',monospace;font-size:11px;letter-spacing:.08em;border:1px solid #C8C2B8;border-radius:10px;padding:11px;background:transparent;color:#6B6560;cursor:pointer;}
+  .tab-btn.active{background:#1A1510;color:#F5F1EB;border-color:#1A1510;}
+  .gear-btn{border:1px solid #C8C2B8;border-radius:10px;background:transparent;padding:10px 13px;font-size:14px;cursor:pointer;color:#6B6560;}
+  .sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .auth-wrap{max-width:340px;margin:0 auto;padding:24px 20px 0;}
+  .header{padding:18px 20px 0;}
+  .sticky{position:sticky;top:0;z-index:10;padding:12px 16px 8px;background:linear-gradient(#F5F1EB 82%,transparent);}
+  .avail-card{border-radius:14px;padding:18px 20px;box-shadow:0 4px 24px rgba(0,0,0,0.15);}
+  .avail-label{font-family:'Azeret Mono',monospace;font-size:9px;letter-spacing:.12em;margin-bottom:6px;}
+  .avail-date{font-weight:300;line-height:1.1;color:#F5F1EB;margin-bottom:10px;}
+  .avail-sub{font-family:'Azeret Mono',monospace;font-size:10px;color:#6B6058;margin-bottom:14px;}
+  .copy-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 16px;color:#F5F1EB;cursor:pointer;font-family:'Azeret Mono',monospace;font-size:11px;letter-spacing:.06em;width:100%;transition:background .2s;}
+  .rev-panel{margin:8px 16px 0;background:#EDE9E2;border-radius:14px;border:1px solid #D5CFC4;padding:16px;}
+  .controls{padding:12px 20px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .toggle-wrap{display:flex;align-items:center;gap:8px;}
+  .toggle{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .slider-toggle{position:absolute;inset:0;background:#C8C2B8;border-radius:12px;transition:.2s;cursor:pointer;}
+  .slider-toggle:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s;}
+  input:checked+.slider-toggle{background:#1A1510;}
+  input:checked+.slider-toggle:before{transform:translateX(18px);}
+  .section-label{padding:14px 20px 6px;display:flex;justify-content:space-between;align-items:center;}
+  .empty{text-align:center;padding:40px 32px;color:#A89E94;font-size:15px;font-style:italic;}
+  .card{background:#EDE9E2;border-radius:14px;margin:0 16px 10px;padding:16px;border:1px solid #D5CFC4;cursor:pointer;-webkit-user-select:none;user-select:none;transition:opacity .15s,transform .15s;}
+  .card.dragging{opacity:.4;transform:scale(.97);}
+  .card.dragover{border-color:#1A1510;border-style:dashed;}
+  .card.drag-active{box-shadow:0 0 0 2px #1A1510;}
+  .card-inner{display:flex;align-items:stretch;gap:12px;}
+  .color-bar{width:3px;border-radius:2px;min-height:36px;flex-shrink:0;}
+  .card-body{flex:1;min-width:0;}
+  .card-name{font-size:17px;color:#1A1510;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px;}
+  .card-dates{font-family:'Azeret Mono',monospace;font-size:11px;color:#6B6560;margin-bottom:8px;}
+  .card-bottom{display:flex;align-items:center;gap:10px;}
+  .conf-track{flex:1;display:flex;align-items:center;gap:6px;}
+  .track{flex:1;height:3px;background:#D5CFC4;border-radius:2px;}
+  .track-fill{height:100%;border-radius:2px;}
+  .rev-chip{font-family:'Azeret Mono',monospace;font-size:11px;flex-shrink:0;background:#F5F1EB;border-radius:6px;padding:2px 7px;border:1px solid #D5CFC4;}
+  .drag-handle{font-size:13px;color:#C8C2B8;line-height:1;padding-bottom:2px;}
+  .add-btn{display:block;width:calc(100% - 32px);margin:8px 16px 0;background:transparent;color:#6B6560;border:1px solid #C8C2B8;border-radius:10px;padding:12px;font-family:'Azeret Mono',monospace;font-size:12px;cursor:pointer;letter-spacing:.04em;}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;}
+  .sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#F5F1EB;border-radius:20px 20px 0 0;z-index:51;padding:0 0 48px;max-height:88vh;overflow-y:auto;}
+  .sheet-handle{width:36px;height:4px;background:#C8C2B8;border-radius:2px;margin:12px auto 20px;}
+  .sheet-body{padding:0 20px;}
+  .sheet-title{font-family:'Azeret Mono',monospace;font-size:11px;letter-spacing:.1em;color:#8A847A;margin-bottom:18px;}
+  label{display:block;font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.1em;color:#8A847A;margin-bottom:6px;text-transform:uppercase;}
+  .field{margin-bottom:16px;}
+  .field-hint{font-family:'Azeret Mono',monospace;font-size:9px;color:#A89E94;margin-top:4px;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .conf-section{margin-bottom:28px;}
+  .conf-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .btn-primary{background:#1A1510;color:#F5F1EB;border:none;border-radius:10px;padding:14px;font-family:'Azeret Mono',monospace;font-size:13px;cursor:pointer;width:100%;letter-spacing:.04em;margin-bottom:10px;}
+  .btn-secondary{background:transparent;color:#1A1510;border:1px solid #1A1510;border-radius:10px;padding:12px;font-family:'Azeret Mono',monospace;font-size:12px;cursor:pointer;width:100%;letter-spacing:.04em;margin-bottom:10px;}
+  .btn-danger{background:transparent;color:#C0392B;border:1px solid #E8B8B8;border-radius:10px;padding:12px;font-family:'Azeret Mono',monospace;font-size:12px;cursor:pointer;width:100%;letter-spacing:.04em;}
+  .buffer-section{padding:8px 20px 4px;}
+  .buffer-ticks{display:flex;justify-content:space-between;font-family:'Azeret Mono',monospace;font-size:9px;color:#A89E94;margin-top:4px;}
+  /* estimator */
+  .back-btn{background:none;border:none;font-family:'Azeret Mono',monospace;font-size:11px;color:#6B6560;cursor:pointer;letter-spacing:.06em;padding:0;}
+  .sum-card{background:#1A1510;border-radius:14px;padding:16px 20px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:flex;justify-content:space-between;align-items:flex-end;}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{font-family:'Azeret Mono',monospace;font-size:11px;letter-spacing:.04em;border:1px solid #C8C2B8;border-radius:8px;padding:8px 14px;background:transparent;color:#6B6560;cursor:pointer;}
+  .chip.on{background:#1A1510;color:#F5F1EB;border-color:#1A1510;}
+  .scope-card{background:#EDE9E2;border-radius:14px;margin:0 16px 10px;padding:14px 16px;border:1px solid #D5CFC4;}
+  .scope-card.off{opacity:.55;}
+  .scope-head{display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+  .scope-name{flex:1;font-size:16px;color:#1A1510;}
+  .hrs-chip{font-family:'Azeret Mono',monospace;font-size:11px;color:#1A1510;background:#F5F1EB;border:1px solid #D5CFC4;border-radius:6px;padding:2px 7px;}
+  .qty-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  .room-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;}
+  .tot-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'Azeret Mono',monospace;font-size:11px;color:#6B6560;padding:3px 0;gap:12px;}
+  .tot-row .amt{color:#1A1510;flex-shrink:0;}
+  .tot-sub{border-top:1px solid #D5CFC4;margin-top:6px;padding-top:8px;font-size:12px;color:#1A1510;}
+  .tot-total{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid #1A1510;margin-top:10px;padding-top:10px;}
+  .reset-link{color:#C0392B;cursor:pointer;text-decoration:underline;}
+  .est-actions{padding:8px 16px 0;}
+  /* quote */
+  .quote-page{background:#fff;margin:12px 16px;border-radius:12px;padding:32px 28px;border:1px solid #D5CFC4;color:#1A1510;}
+  .q-line{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #EDE9E2;font-size:15px;}
+  .q-total{display:flex;justify-content:space-between;padding-top:14px;font-size:20px;}
+  @media print{
+    body{background:#fff;}
+    #app{max-width:none;padding:0;}
+    .no-print{display:none!important;}
+    .quote-page{border:none;margin:0;border-radius:0;padding:24px 8px;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const COLORS=["#C0392B","#2471A3","#1E8449","#7D3C98","#D4860A","#117A65","#BA4A00","#1A5276","#784212","#4A235A"];
+const LONG_PRESS=400;
+const STORAGE_KEY="jobbook-v1";
+const SUPABASE_URL="https://hyavgjaqzkfaptjlyzgv.supabase.co";
+const SUPABASE_ANON_KEY="sb_publishable_hRFA8VXn7YdJCIrMhfU_kQ_KDYHgxCM";
+
+// ── Helpers ──
+// All ISO date strings are parsed as LOCAL midnight so add/diff/format stay
+// internally consistent — mixing UTC parsing with local reads drops a day.
+function parseD(d){return typeof d==="string"&&d.length===10?new Date(d+"T00:00:00"):new Date(d);}
+function toISO(d){const x=parseD(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");}
+function addDays(d,n){const x=parseD(d);x.setDate(x.getDate()+n);return x;}
+function daysBetween(a,b){return Math.max(0,Math.round((parseD(b)-parseD(a))/86400000));}
+function fmtShort(d){return parseD(d).toLocaleDateString("en-US",{month:"short",day:"numeric"});}
+function fmtFull(d){return parseD(d).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});}
+function fmtK(n){if(!n)return"$0";if(n>=1000)return"$"+(n/1000).toFixed(n%1000===0?0:1)+"k";return"$"+Math.round(n);}
+function fmt$(n){return"$"+Math.round(n).toLocaleString("en-US");}
+function fmtQ(n){return Math.round(n).toLocaleString("en-US");}
+function num(v){const x=parseFloat(v);return isNaN(x)?0:x;}
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}
+const $=id=>document.getElementById(id);
+
+const today=new Date();today.setHours(0,0,0,0);
+
+// ── Scope definitions (lo/mid/hi = labor hrs per unit ranges) ──
+const SCOPES={
+  walls:    {label:"Walls — paint",             trade:"paint",  lo:.015, mid:.018, hi:.022, unit:"floor sq ft"},
+  ceilings: {label:"Ceilings — paint",          trade:"paint",  lo:.010, mid:.012, hi:.014, unit:"ceiling sq ft"},
+  trim:     {label:"Trim — paint",              trade:"paint",  lo:.014, mid:.018, hi:.020, unit:"LF"},
+  doors:    {label:"Doors — paint",             trade:"paint",  lo:1.25, mid:1.5,  hi:1.75, unit:"door"},
+  popcorn:  {label:"Popcorn ceiling removal",   trade:"paint",  lo:.010, mid:.015, hi:.020, unit:"ceiling sq ft"},
+  wallpaper:{label:"Wallpaper removal",         trade:"paint",  lo:.010, mid:.017, hi:.025, unit:"wall sq ft"},
+  hang:     {label:"Drywall — hang",            trade:"drywall",lo:.0025,mid:.0033,hi:.0040,unit:"sq ft"},
+  finish:   {label:"Drywall — finish (L4)",     trade:"drywall",lo:.006, mid:.008, hi:.010, unit:"sq ft"},
+  prime:    {label:"Drywall — prime",           trade:"drywall",lo:.002, mid:.0028,hi:.0035,unit:"sq ft"},
+  patch:    {label:"Drywall — patch / repair",  trade:"drywall",lo:.05,  mid:.15,  hi:.30,  unit:"repair sq ft"},
+};
+const SCOPE_ORDER=["walls","ceilings","trim","doors","popcorn","wallpaper","hang","finish","prime","patch"];
+// which quantity key feeds each scope's labor
+const SCOPE_QTY={walls:"floorSqft",ceilings:"ceilSqft",trim:"trimLF",doors:"doors",popcorn:"popcornSqft",
+  wallpaper:"wallpaperSqft",hang:"hangSqft",finish:"finishSqft",prime:"primeSqft",patch:"patchSqft"};
+
+function defaultSettings(){return{
+  company:"",
+  ratePaint:65, rateDrywall:70, hrsDay:8, markup:20,
+  wallFactor:2.4, trimFactor:0.33,
+  labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:.0033,finish:.008,prime:.0028,patch:.15},
+  // wallCoatCov/ceilCoatCov = wall/ceiling sq ft one gallon covers in a SINGLE coat
+  cov:{wallCoatCov:350,ceilCoatCov:350,trimGal:500,doorsGal:15,sheet:32,waste:10,screwSheets:7,tapeSheets:25,mudSqft:425,primeGal:300,removerGal:750,maskFactor:1.15},
+  price:{wallPaint:45,ceilPaint:32,trimPaint:55,primer:28,sheet:16,screws:9,tape:7,mud:18,bead:5,remover:25,maskSqft:.05,patchSqft:1.5},
+  // labor/material modifiers for coats, surface texture, and drywall finish level
+  mult:{extraCoatWall:.35,extraCoatCeil:.6,textureLight:1.12,textureHeavy:1.25,finishL5lab:1.4,finishL5mud:1.35},
+  reply:"Thanks for reaching out — I'd love to help with your project. Based on my current schedule, I could start as early as {date}. Let me know if that works for you and we'll get it on the books.",
+  replyNow:"Thanks for reaching out — I'd love to help with your project. I'm available now and can get started right away. Let me know and we'll lock in a date.",
+};}
+
+// ── State ──
+let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,
+  tsheet:null,tform:{name:"",duration:14,confidence:75,value:""},
+  buffer:7,showPadding:false,forecastDays:30,expandBuffer:false,
+  dragIndex:null,dragOver:null,dragReady:false,copied:false};
+
+// pendingDeletes tracks ids removed locally that still need to be deleted
+// from Supabase — cleared once a sync successfully applies them.
+let data={settings:defaultSettings(),estimates:[],projects:[],nextId:1,nextEstId:1,
+  pendingDeletes:{estimates:[],projects:[]}};
+
+// auth/cloud sync state — separate from `data` since it's not persisted as-is
+let sb=null;
+let auth={ready:false,session:null,libFailed:false,email:"",otpSent:false,sending:false,error:""};
+let cloud={status:"idle",lastSync:null,error:null}; // idle|syncing|synced|error|offline
+
+function deepMerge(base,over){
+  if(typeof base!=="object"||base===null)return over===undefined?base:over;
+  const out=Array.isArray(base)?(over||base):{...base};
+  if(!Array.isArray(base)&&over&&typeof over==="object"){
+    for(const k in base)out[k]=deepMerge(base[k],over[k]);
+    for(const k in over)if(!(k in base))out[k]=over[k];
+  }
+  return out;
+}
+function freshData(){
+  return{settings:defaultSettings(),estimates:[],projects:[],nextId:1,nextEstId:1,
+    pendingDeletes:{estimates:[],projects:[]}};
+}
+function load(){
+  try{
+    const s=localStorage.getItem(STORAGE_KEY);
+    if(s){
+      const d=JSON.parse(s);
+      data.settings=deepMerge(defaultSettings(),d.settings||{});
+      data.estimates=d.estimates||[];data.projects=d.projects||[];
+      data.nextId=d.nextId||1;data.nextEstId=d.nextEstId||1;
+      data.pendingDeletes=d.pendingDeletes||{estimates:[],projects:[]};
+    }
+  }catch{}
+}
+// Writes the local cache only — always instant, works offline, never touches
+// the network. Cloud sync (queueCloudSync) is layered on top of this.
+function saveLocal(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}catch{}}
+function save(){saveLocal();queueCloudSync();}
+
+function deleteEstimate(id){
+  data.estimates=data.estimates.filter(e=>e.id!==id);
+  data.pendingDeletes.estimates.push(id);
+  save();
+}
+function deleteProject(id){
+  data.projects=data.projects.filter(p=>p.id!==id);
+  data.pendingDeletes.projects.push(id);
+  save();
+}
+
+// ══════════════════════ CLOUD SYNC ══════════════════════
+let syncTimer=null;
+function queueCloudSync(){
+  if(!sb||!auth.session)return;
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(syncToCloud,900);
+}
+function updateSyncIndicator(){
+  const dot=$("syncDot");
+  if(!dot)return;
+  const color=cloud.status==="syncing"?"#D4860A":(cloud.status==="error"||cloud.status==="offline")?"#C0392B":"#1E8449";
+  const title=cloud.status==="syncing"?"Syncing…"
+    :cloud.status==="error"?"Sync error: "+(cloud.error||"unknown")
+    :cloud.status==="offline"?"Offline — using local cache, will sync when reconnected"
+    :cloud.lastSync?"Synced "+cloud.lastSync.toLocaleTimeString():"Not yet synced";
+  dot.style.background=color;dot.title=title;
+}
+async function syncToCloud(){
+  if(!sb||!auth.session)return;
+  const uid=auth.session.user.id;
+  cloud.status="syncing";updateSyncIndicator();
+  try{
+    const now=new Date().toISOString();
+    await sb.from("user_settings").upsert({user_id:uid,settings:data.settings,next_id:data.nextId,next_est_id:data.nextEstId,updated_at:now});
+    if(data.estimates.length){
+      const{error}=await sb.from("estimates").upsert(data.estimates.map(e=>({id:e.id,user_id:uid,data:e,updated_at:now})));
+      if(error)throw error;
+    }
+    if(data.projects.length){
+      const{error}=await sb.from("projects").upsert(data.projects.map(p=>({id:p.id,user_id:uid,data:p,updated_at:now})));
+      if(error)throw error;
+    }
+    if(data.pendingDeletes.estimates.length){
+      await sb.from("estimates").delete().eq("user_id",uid).in("id",data.pendingDeletes.estimates);
+      data.pendingDeletes.estimates=[];
+    }
+    if(data.pendingDeletes.projects.length){
+      await sb.from("projects").delete().eq("user_id",uid).in("id",data.pendingDeletes.projects);
+      data.pendingDeletes.projects=[];
+    }
+    saveLocal();
+    cloud.status="synced";cloud.lastSync=new Date();cloud.error=null;
+  }catch(err){
+    cloud.status="error";cloud.error=err&&err.message||String(err);
+  }
+  updateSyncIndicator();
+}
+// Pulls server state down. Adopts it wholesale only when the local cache is
+// still empty (fresh device/browser) or `force` is passed — otherwise the
+// current device's local copy stays authoritative and just pushes up via
+// the normal save() -> queueCloudSync() path, avoiding clobbering in-progress
+// edits with a stale server snapshot (no cross-device merge is attempted).
+async function pullFromCloud({force=false}={}){
+  if(!sb||!auth.session)return;
+  const uid=auth.session.user.id;
+  cloud.status="syncing";updateSyncIndicator();
+  try{
+    const[usRes,estRes,projRes]=await Promise.all([
+      sb.from("user_settings").select("*").eq("user_id",uid).maybeSingle(),
+      sb.from("estimates").select("*").eq("user_id",uid),
+      sb.from("projects").select("*").eq("user_id",uid),
+    ]);
+    if(usRes.error)throw usRes.error;
+    if(estRes.error)throw estRes.error;
+    if(projRes.error)throw projRes.error;
+    const us=usRes.data;
+    const localEmpty=data.estimates.length===0&&data.projects.length===0;
+    if(!us){
+      await syncToCloud(); // first sync for this account — seed the cloud from local
+    }else if(force||localEmpty){
+      data.settings=deepMerge(defaultSettings(),us.settings||{});
+      data.nextId=us.next_id||1;data.nextEstId=us.next_est_id||1;
+      data.estimates=(estRes.data||[]).map(r=>r.data).sort((a,b)=>a.id-b.id);
+      data.projects=(projRes.data||[]).map(r=>r.data);
+      data.pendingDeletes={estimates:[],projects:[]};
+      saveLocal();render();
+    }
+    cloud.status="synced";cloud.lastSync=new Date();cloud.error=null;
+  }catch(err){
+    cloud.status="offline";cloud.error=err&&err.message||String(err);
+  }
+  updateSyncIndicator();
+}
+load();
+
+// ══════════════════════ ESTIMATOR MATH ══════════════════════
+function diffFactor(k,diff){
+  const s=SCOPES[k];
+  return diff==="easy"?s.lo/s.mid:diff==="hard"?s.hi/s.mid:1;
+}
+function effQ(est){
+  const S=data.settings,man=est.manual||{},a={};
+  if(est.mode==="rooms"){
+    let f=0,w=0,t=0,d=0;
+    (est.rooms||[]).forEach(r=>{
+      const L=num(r.l),W=num(r.w),H=num(r.h),dr=num(r.doors);
+      f+=L*W;w+=Math.max(0,2*(L+W)*H-dr*20);t+=2*(L+W);d+=dr;
+    });
+    a.floorSqft=Math.round(f);a.wallSqft=Math.round(w);a.ceilSqft=Math.round(f);a.trimLF=Math.round(t);a.doors=d;
+  }else{
+    const f=num(est.quick&&est.quick.floor);
+    a.floorSqft=f;a.wallSqft=Math.round(f*S.wallFactor);a.ceilSqft=f;a.trimLF=Math.round(f*S.trimFactor);a.doors=0;
+  }
+  const q={};
+  const eff=(k,av)=>{q[k]=man[k]?num(est.q[k]):av;};
+  eff("floorSqft",a.floorSqft);eff("wallSqft",a.wallSqft);eff("ceilSqft",a.ceilSqft);
+  eff("trimLF",a.trimLF);eff("doors",a.doors);
+  eff("popcornSqft",q.ceilSqft);eff("wallpaperSqft",q.wallSqft);
+  eff("hangSqft",0);eff("corners",0);
+  eff("finishSqft",q.hangSqft);eff("primeSqft",q.finishSqft);
+  eff("patchSqft",0);
+  return q;
+}
+function compute(est){
+  const S=data.settings,M=S.mult,q=effQ(est),diff=est.difficulty||"std";
+  const wc=wallCoats(est),cc=ceilCoats(est),fl=finishLevel(est);
+  const wallCoatMult=1+(wc-2)*M.extraCoatWall;   // labor scales from a 2-coat baseline
+  const ceilCoatMult=1+(cc-1)*M.extraCoatCeil;   // ceiling labor baseline is 1 coat
+  const texLab=texLabMult(est),texGal=texGalMult(est);
+  const rows=[];const hrs={paint:0,drywall:0};
+  SCOPE_ORDER.forEach(k=>{
+    if(!est.scopes[k])return;
+    const qty=q[SCOPE_QTY[k]];
+    const rate=(S.labor[k]||SCOPES[k].mid)*diffFactor(k,diff);
+    let h=qty*rate;
+    if(k==="walls")h*=wallCoatMult*texLab;
+    if(k==="ceilings")h*=ceilCoatMult*texLab;
+    if(k==="finish"&&fl===5)h*=M.finishL5lab;
+    rows.push({k,label:SCOPES[k].label,qty,unit:SCOPES[k].unit,h,trade:SCOPES[k].trade});
+    hrs[SCOPES[k].trade]+=h;
+  });
+  // materials
+  const mats=[];
+  const add=(label,qty,unit,price,trade)=>{if(qty>0)mats.push({label,qty,unit,price,cost:qty*price,trade});};
+  const c=S.cov,p=S.price;
+  if(est.scopes.walls)add(`Wall paint (${wc}-coat)`,Math.ceil(q.wallSqft*wc/c.wallCoatCov*texGal),"gal",p.wallPaint,"paint");
+  if(est.scopes.ceilings)add(`Ceiling paint (${cc}-coat)`,Math.ceil(q.ceilSqft*cc/c.ceilCoatCov*texGal),"gal",p.ceilPaint,"paint");
+  let tg=0;
+  if(est.scopes.trim)tg+=q.trimLF/c.trimGal;
+  if(est.scopes.doors)tg+=q.doors/c.doorsGal;
+  if(tg>0)add("Trim / door paint",Math.ceil(tg),"gal",p.trimPaint,"paint");
+  if(est.scopes.popcorn)add("Plastic & masking",Math.ceil(q.popcornSqft*c.maskFactor),"sq ft",p.maskSqft,"paint");
+  if(est.scopes.wallpaper)add("Wallpaper remover",Math.ceil(q.wallpaperSqft/c.removerGal),"gal",p.remover,"paint");
+  let sheets=0;
+  if(est.scopes.hang){
+    sheets=Math.ceil(q.hangSqft/c.sheet*(1+c.waste/100));
+    add("Drywall sheets (4×8)",sheets,"sheets",p.sheet,"drywall");
+    add("Drywall screws",Math.ceil(sheets/c.screwSheets),"lb",p.screws,"drywall");
+    add("Corner bead (8')",Math.ceil(q.corners),"sticks",p.bead,"drywall");
+  }
+  if(est.scopes.finish&&q.finishSqft>0){
+    add(`Joint compound${fl===5?" (L5 skim)":""}`,Math.ceil(q.finishSqft/c.mudSqft*(fl===5?M.finishL5mud:1)),"buckets",p.mud,"drywall");
+    add("Joint tape (500')",Math.max(1,Math.ceil(q.finishSqft/c.sheet/c.tapeSheets)),"rolls",p.tape,"drywall");
+  }
+  if(est.scopes.prime)add("Drywall primer",Math.ceil(q.primeSqft/c.primeGal),"gal",p.primer,"drywall");
+  if(est.scopes.patch)add("Patch supplies",q.patchSqft,"sq ft",p.patchSqft,"drywall");
+  const laborPaint=hrs.paint*S.ratePaint;
+  const laborDry=hrs.drywall*S.rateDrywall;
+  const matCost=mats.reduce((s,m)=>s+m.cost,0);
+  const matCharge=matCost*(1+S.markup/100);
+  const totalHrs=hrs.paint+hrs.drywall;
+  const total=laborPaint+laborDry+matCharge;
+  const days=totalHrs>0?Math.max(1,Math.ceil(totalHrs/S.hrsDay)):0;
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,totalHrs,total,days};
+}
+function quoteLines(est){
+  const S=data.settings,c=compute(est),lines=[];
+  c.rows.forEach(r=>{
+    if(r.qty<=0)return;
+    let desc;
+    const n=fmtQ(r.qty);
+    const coatWord=x=>x===1?"one coat":x===2?"two coats":x===3?"three coats":`${x} coats`;
+    const texWord=texture(est)==="heavy"?", textured":texture(est)==="light"?", light texture":"";
+    switch(r.k){
+      case"walls":desc=`Paint interior walls, ${coatWord(wallCoats(est))}${texWord} — ${fmtQ(c.q.wallSqft)} sq ft`;break;
+      case"ceilings":desc=`Paint ceilings, ${coatWord(ceilCoats(est))}${texWord} — ${n} sq ft`;break;
+      case"trim":desc=`Paint trim — ${n} linear ft`;break;
+      case"doors":desc=`Paint doors — ${n} door${r.qty===1?"":"s"}`;break;
+      case"popcorn":desc=`Popcorn ceiling removal — ${n} sq ft`;break;
+      case"wallpaper":desc=`Wallpaper removal — ${n} sq ft`;break;
+      case"hang":desc=`Hang drywall — ${n} sq ft`;break;
+      case"finish":desc=`Tape & finish drywall, Level ${finishLevel(est)} — ${n} sq ft`;break;
+      case"prime":desc=`Prime new drywall — ${n} sq ft`;break;
+      case"patch":desc=`Drywall patch & repair — ${n} sq ft`;break;
+    }
+    const rate=r.trade==="paint"?S.ratePaint:S.rateDrywall;
+    lines.push({desc,amt:Math.round(r.h*rate)});
+  });
+  if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge)});
+  return{lines,total:lines.reduce((s,l)=>s+l.amt,0),c};
+}
+function newEstimate(){
+  return{id:data.nextEstId++,name:"",mode:"quick",quick:{floor:""},rooms:[],
+    scopes:{walls:1,ceilings:1,trim:1,doors:1,popcorn:0,wallpaper:0,hang:0,finish:0,prime:0,patch:0},
+    wallCoats:2,ceilCoats:1,finishLevel:4,texture:"smooth",
+    q:{},manual:{},difficulty:"std",created:toISO(today),projectId:null};
+}
+// per-estimate modifier accessors with legacy fallbacks
+function wallCoats(e){return e.wallCoats||2;}
+function ceilCoats(e){return e.ceilCoats||(e.coats===2?2:1);}
+function finishLevel(e){return e.finishLevel||4;}
+function texture(e){return e.texture||"smooth";}
+function texGalMult(e){const m=data.settings.mult,t=texture(e);return t==="heavy"?m.textureHeavy:t==="light"?m.textureLight:1;}
+function texLabMult(e){return 1+(texGalMult(e)-1)/2;} // labor bump is ~half the paint bump
+function getEst(id){return data.estimates.find(e=>e.id===id);}
+
+// ══════════════════════ TIMELINE MATH ══════════════════════
+function confPad(end,conf){return toISO(addDays(end,Math.round(((100-conf)/100)*14)));}
+function confColor(cf){return cf>=80?"#1E8449":cf>=50?"#D4860A":"#C0392B";}
+function confLabel(cf){return cf>=80?"High — minimal padding":`${cf>=50?"Medium":"Low"} — ~${Math.round(((100-cf)/100)*14)}d padding`;}
+function revenueInWindow(p,days){
+  if(!p.value)return 0;
+  const end=new Date(p.end_date),win=addDays(today,days);
+  return(end>=today&&end<=win)?p.value:0;
+}
+function cascade(projects,showPad){
+  let cursor=toISO(today);
+  return projects.map(p=>{
+    const start=cursor;
+    const dur=daysBetween(p.start_date,p.end_date);
+    const end=toISO(addDays(start,dur));
+    const padded=confPad(end,p.confidence);
+    cursor=showPad?padded:end;
+    return{...p,start_date:start,end_date:end,paddedEnd:padded};
+  });
+}
+function tlDerived(){
+  const projects=cascade(data.projects,ui.showPadding);
+  const last=projects[projects.length-1];
+  const baseEnd=last?(ui.showPadding?last.paddedEnd:last.end_date):toISO(today);
+  const nextAvail=addDays(baseEnd,ui.buffer);
+  const daysOut=daysBetween(today,nextAvail);
+  const revTotal=projects.reduce((s,p)=>s+revenueInWindow(p,ui.forecastDays),0);
+  return{projects,nextAvail,daysOut,revTotal};
+}
+
+// ══════════════════════ RENDER: SHARED ══════════════════════
+function tabbarHTML(){
+  const dotColor=cloud.status==="syncing"?"#D4860A":(cloud.status==="error"||cloud.status==="offline")?"#C0392B":"#1E8449";
+  const dotTitle=cloud.status==="syncing"?"Syncing…"
+    :cloud.status==="error"?"Sync error: "+(cloud.error||"unknown")
+    :cloud.status==="offline"?"Offline — using local cache, will sync when reconnected"
+    :cloud.lastSync?"Synced "+cloud.lastSync.toLocaleTimeString():"Not yet synced";
+  const email=auth.session?.user?.email||"";
+  return`<div class="tabbar no-print">
+    <button class="tab-btn${ui.tab==="est"?" active":""}" id="tabEst">ESTIMATES</button>
+    <button class="tab-btn${ui.tab==="tl"?" active":""}" id="tabTl">TIMELINE</button>
+    <button class="gear-btn" id="gearBtn" title="Settings">⚙</button>
+    ${auth.session?`<span class="sync-dot" id="syncDot" title="${esc(dotTitle)}" style="background:${dotColor}"></span>
+    <button class="gear-btn" id="signOutBtn" title="Sign out (${esc(email)})">⎋</button>`:""}
+  </div>`;
+}
+
+// ══════════════════════ RENDER: AUTH ══════════════════════
+function authScreenHTML(){
+  return`
+  <div class="header" style="padding-top:56px;text-align:center">
+    <div class="eyebrow">JOBBOOK</div>
+    <div class="headline">Sign in to<br><em>your account</em></div>
+  </div>
+  <div class="auth-wrap">
+    ${auth.error?`<div class="field-hint" style="color:#C0392B;margin-bottom:12px;font-size:11px">${esc(auth.error)}</div>`:""}
+    ${!auth.otpSent?`
+    <div class="field">
+      <label>Email</label>
+      <input type="text" id="authEmail" value="${esc(auth.email)}" placeholder="you@example.com" inputmode="email" autocapitalize="off" autocorrect="off"/>
+    </div>
+    <button class="btn-primary" id="sendCodeBtn" ${auth.sending?"disabled":""}>${auth.sending?"SENDING…":"EMAIL ME A CODE"}</button>
+    <div style="text-align:center;margin:14px 0;color:#A89E94;font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.1em">— OR —</div>
+    <button class="btn-secondary" id="googleBtn">CONTINUE WITH GOOGLE</button>
+    <div class="field-hint" style="text-align:center;margin-top:8px">Google sign-in needs this page served from a real URL (not opened as a local file).</div>
+    `:`
+    <div class="field-hint" style="margin-bottom:10px">Code sent to ${esc(auth.email)} — check your inbox.</div>
+    <div class="field">
+      <label>6-digit code</label>
+      <input type="text" id="authCode" inputmode="numeric" maxlength="6" placeholder="000000"/>
+    </div>
+    <button class="btn-primary" id="verifyBtn" ${auth.sending?"disabled":""}>${auth.sending?"VERIFYING…":"VERIFY & SIGN IN"}</button>
+    <button class="btn-secondary" id="resendBtn">USE A DIFFERENT EMAIL</button>
+    `}
+  </div>`;
+}
+function bindAuthScreen(){
+  $("authEmail")?.addEventListener("input",e=>{auth.email=e.target.value;});
+  $("authEmail")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("sendCodeBtn")?.click();});
+  $("sendCodeBtn")?.addEventListener("click",async()=>{
+    const email=($("authEmail")?.value||"").trim();
+    if(!email){auth.error="Enter an email address.";render();return;}
+    auth.email=email;auth.sending=true;auth.error="";render();
+    try{
+      const{error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
+      if(error)throw error;
+      auth.otpSent=true;
+    }catch(err){auth.error=err&&err.message||String(err);}
+    auth.sending=false;render();
+    setTimeout(()=>$("authCode")?.focus(),100);
+  });
+  $("googleBtn")?.addEventListener("click",async()=>{
+    auth.error="";
+    try{
+      const{error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:window.location.href}});
+      if(error)throw error;
+    }catch(err){auth.error=err&&err.message||String(err);render();}
+  });
+  $("authCode")?.addEventListener("input",e=>{e.target.value=e.target.value.replace(/\D/g,"").slice(0,6);});
+  $("authCode")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("verifyBtn")?.click();});
+  $("verifyBtn")?.addEventListener("click",async()=>{
+    const token=($("authCode")?.value||"").trim();
+    if(token.length!==6){auth.error="Enter the 6-digit code from the email.";render();return;}
+    auth.sending=true;auth.error="";render();
+    try{
+      const{error}=await sb.auth.verifyOtp({email:auth.email,token,type:"email"});
+      if(error)throw error;
+      // success: onAuthStateChange fires SIGNED_IN, which pulls from cloud and re-renders
+    }catch(err){
+      auth.error=err&&err.message||String(err);
+      auth.sending=false;render();
+    }
+  });
+  $("resendBtn")?.addEventListener("click",()=>{auth.otpSent=false;auth.error="";render();});
+}
+
+// ══════════════════════ RENDER: ESTIMATE LIST ══════════════════════
+function estListHTML(){
+  const ests=[...data.estimates].sort((a,b)=>b.id-a.id);
+  return`
+  <div class="header">
+    <div class="eyebrow">PAINT + DRYWALL</div>
+    <div class="headline">What will<br><em>it cost?</em></div>
+  </div>
+  <div class="section-label">
+    <span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">ESTIMATES — ${ests.length}</span>
+  </div>
+  ${ests.length===0?`<div class="empty">No estimates yet. Start one below.</div>`:""}
+  ${ests.map((e,i)=>{
+    const c=compute(e);
+    const onTl=e.projectId&&data.projects.some(p=>p.id===e.projectId);
+    return`<div class="card" data-est="${e.id}">
+      <div class="card-inner">
+        <div class="color-bar" style="background:${COLORS[i%COLORS.length]}"></div>
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div class="card-name">${e.name?esc(e.name):'<em style="color:#A89E94">Untitled</em>'}</div>
+            <div class="mono" style="font-size:10px;color:#8A847A;flex-shrink:0;padding-top:2px">${fmtShort(e.created)}</div>
+          </div>
+          <div class="card-dates">${c.totalHrs.toFixed(1)} hrs · ${c.days} day${c.days===1?"":"s"}${onTl?' · <span style="color:#1E8449">on timeline</span>':""}</div>
+          <div class="card-bottom">
+            <div class="rev-chip" style="color:#1A1510">${fmt$(c.total)}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("")}
+  <button class="add-btn" id="newEstBtn">+ New estimate</button>`;
+}
+
+// ══════════════════════ RENDER: ESTIMATE EDITOR ══════════════════════
+function qtyField(est,c,key,lbl){
+  const man=est.manual&&est.manual[key];
+  return`<div>
+    <label>${lbl}</label>
+    <input type="number" step="any" inputmode="decimal" data-q="${key}" value="${c.q[key]||""}" placeholder="0"/>
+    <div class="field-hint" id="hint-${key}">${man?`manual · <span class="reset-link" data-reset="${key}">reset to auto</span>`:"auto"}</div>
+  </div>`;
+}
+function coatsChips(attr,val){
+  return`<div><label>Coats</label>
+    <div class="chip-row" style="margin-top:2px">
+      ${[1,2,3].map(n=>`<button class="chip${val===n?" on":""}" ${attr}="${n}">${n}</button>`).join("")}
+    </div></div>`;
+}
+function scopeFieldsHTML(est,c,k){
+  switch(k){
+    case"walls":return`<div class="qty-grid">${qtyField(est,c,"floorSqft","Floor sq ft (labor)")}${qtyField(est,c,"wallSqft","Wall sq ft (paint)")}</div>
+      ${coatsChips("data-wcoats",wallCoats(est))}`;
+    case"ceilings":return`<div class="qty-grid">${qtyField(est,c,"ceilSqft","Ceiling sq ft")}${coatsChips("data-ccoats",ceilCoats(est))}</div>`;
+    case"trim":return`<div class="qty-grid">${qtyField(est,c,"trimLF","Trim LF")}</div>`;
+    case"doors":return`<div class="qty-grid">${qtyField(est,c,"doors","Door count")}</div>`;
+    case"popcorn":return`<div class="qty-grid">${qtyField(est,c,"popcornSqft","Ceiling sq ft")}</div>`;
+    case"wallpaper":return`<div class="qty-grid">${qtyField(est,c,"wallpaperSqft","Wall sq ft")}</div>`;
+    case"hang":return`<div class="qty-grid">${qtyField(est,c,"hangSqft","Drywall sq ft")}${qtyField(est,c,"corners","Outside corners")}</div>`;
+    case"finish":return`<div class="qty-grid">${qtyField(est,c,"finishSqft","Finish sq ft")}
+      <div><label>Finish level</label>
+        <div class="chip-row" style="margin-top:2px">
+          <button class="chip${finishLevel(est)===4?" on":""}" data-flevel="4">L4 STD</button>
+          <button class="chip${finishLevel(est)===5?" on":""}" data-flevel="5">L5 SMOOTH</button>
+        </div>
+      </div></div>
+      <div class="field-hint">Level 5 = skim-coated smooth for flat paint / raking light; more mud &amp; labor</div>`;
+    case"prime":return`<div class="qty-grid">${qtyField(est,c,"primeSqft","Prime sq ft")}</div>`;
+    case"patch":return`<div class="qty-grid">${qtyField(est,c,"patchSqft","Repair sq ft")}</div>`;
+  }
+  return"";
+}
+function totalsHTML(c){
+  const S=data.settings;
+  return`
+  <div style="margin:0 16px 10px;background:#EDE9E2;border-radius:14px;border:1px solid #D5CFC4;padding:16px">
+    <div class="eyebrow">LABOR</div>
+    ${c.rows.map(r=>`<div class="tot-row"><span>${r.label} · ${fmtQ(r.qty)} ${r.unit}</span><span class="amt">${r.h.toFixed(1)}h</span></div>`).join("")}
+    ${c.hrs.paint>0?`<div class="tot-row tot-sub"><span>Paint · ${c.hrs.paint.toFixed(1)}h × ${fmt$(S.ratePaint)}/hr</span><span class="amt">${fmt$(c.laborPaint)}</span></div>`:""}
+    ${c.hrs.drywall>0?`<div class="tot-row${c.hrs.paint>0?"":" tot-sub"}"><span>Drywall · ${c.hrs.drywall.toFixed(1)}h × ${fmt$(S.rateDrywall)}/hr</span><span class="amt">${fmt$(c.laborDry)}</span></div>`:""}
+    <div class="eyebrow" style="margin-top:16px">MATERIALS</div>
+    ${c.mats.length===0?`<div class="tot-row"><span style="font-style:italic">none</span></div>`:""}
+    ${c.mats.map(m=>`<div class="tot-row"><span>${m.label} · ${m.qty%1?m.qty.toFixed(1):fmtQ(m.qty)} ${m.unit}</span><span class="amt">${fmt$(m.cost)}</span></div>`).join("")}
+    ${c.matCost>0?`<div class="tot-row tot-sub"><span>Materials + ${S.markup}% markup</span><span class="amt">${fmt$(c.matCharge)}</span></div>`:""}
+    <div class="tot-total">
+      <span class="mono" style="font-size:11px;letter-spacing:.1em">TOTAL</span>
+      <span style="font-size:26px;font-weight:300">${fmt$(c.total)}</span>
+    </div>
+    <div class="field-hint" style="margin-top:6px">${c.totalHrs.toFixed(1)} labor hrs ≈ ${c.days} day${c.days===1?"":"s"} @ ${S.hrsDay}h/day</div>
+  </div>`;
+}
+function editorHTML(){
+  const est=getEst(ui.editId);
+  if(!est)return estListHTML();
+  const c=compute(est);
+  const onTl=est.projectId&&data.projects.some(p=>p.id===est.projectId);
+  return`
+  <div class="header" style="padding-top:14px">
+    <button class="back-btn" id="backBtn">← ESTIMATES</button>
+  </div>
+  <div class="sticky">
+    <div class="sum-card">
+      <div>
+        <div class="avail-label" style="color:#8A8070">ESTIMATE TOTAL</div>
+        <div class="avail-date" style="font-size:30px;margin-bottom:0" id="sumTotal">${fmt$(c.total)}</div>
+      </div>
+      <div class="mono" style="font-size:10px;color:#8A8070;text-align:right" id="sumHrs">${c.totalHrs.toFixed(1)}h · ${c.days}d</div>
+    </div>
+  </div>
+  <div style="padding:8px 16px 0">
+    <div class="field">
+      <label>Job / customer name</label>
+      <input type="text" id="eName" value="${esc(est.name)}" placeholder="e.g. Miller — living room repaint"/>
+    </div>
+    <div class="field">
+      <label>Measurement mode</label>
+      <div class="chip-row">
+        <button class="chip${est.mode==="quick"?" on":""}" data-mode="quick">QUICK TOTALS</button>
+        <button class="chip${est.mode==="rooms"?" on":""}" data-mode="rooms">ROOM BY ROOM</button>
+      </div>
+    </div>
+    ${est.mode==="quick"?`
+    <div class="field">
+      <label>Finished floor sq ft</label>
+      <input type="number" step="any" inputmode="decimal" id="qFloor" value="${est.quick.floor||""}" placeholder="0"/>
+      <div class="field-hint">wall sq ft auto = floor × ${data.settings.wallFactor} · trim LF auto = floor × ${data.settings.trimFactor}</div>
+    </div>`:`
+    <div class="field">
+      <label>Rooms</label>
+      ${(est.rooms||[]).map(r=>`
+      <div style="background:#EDE9E2;border:1px solid #D5CFC4;border-radius:12px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" data-rid="${r.id}" data-f="name" value="${esc(r.name)}" placeholder="Room name" style="flex:1"/>
+          <button class="back-btn" data-delroom="${r.id}" style="color:#C0392B;font-size:14px;padding:4px 6px">✕</button>
+        </div>
+        <div class="room-grid">
+          <div><label>L ft</label><input type="number" step="any" inputmode="decimal" data-rid="${r.id}" data-f="l" value="${r.l||""}"/></div>
+          <div><label>W ft</label><input type="number" step="any" inputmode="decimal" data-rid="${r.id}" data-f="w" value="${r.w||""}"/></div>
+          <div><label>H ft</label><input type="number" step="any" inputmode="decimal" data-rid="${r.id}" data-f="h" value="${r.h||""}"/></div>
+          <div><label>Doors</label><input type="number" step="1" inputmode="numeric" data-rid="${r.id}" data-f="doors" value="${r.doors||""}"/></div>
+        </div>
+      </div>`).join("")}
+      <button class="btn-secondary" id="addRoomBtn" style="margin-bottom:0">+ ADD ROOM</button>
+      <div class="field-hint" id="roomSum">${roomSumText(c)}</div>
+    </div>`}
+    <div class="field">
+      <label>Difficulty</label>
+      <div class="chip-row">
+        <button class="chip${est.difficulty==="easy"?" on":""}" data-diff="easy">EASY</button>
+        <button class="chip${est.difficulty!=="easy"&&est.difficulty!=="hard"?" on":""}" data-diff="std">STANDARD</button>
+        <button class="chip${est.difficulty==="hard"?" on":""}" data-diff="hard">HARD</button>
+      </div>
+      <div class="field-hint">shifts every labor rate to the low / mid / high end of its range</div>
+    </div>
+    <div class="field">
+      <label>Surface texture (walls & ceilings)</label>
+      <div class="chip-row">
+        <button class="chip${texture(est)==="smooth"?" on":""}" data-tex="smooth">SMOOTH / FLAT</button>
+        <button class="chip${texture(est)==="light"?" on":""}" data-tex="light">LIGHT TEXTURE</button>
+        <button class="chip${texture(est)==="heavy"?" on":""}" data-tex="heavy">HEAVY TEXTURE</button>
+      </div>
+      <div class="field-hint">textured surfaces drink more paint and take a little longer to roll</div>
+    </div>
+  </div>
+  <div class="section-label"><span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">SCOPE — TAP TO INCLUDE</span></div>
+  ${SCOPE_ORDER.map(k=>{
+    const on=!!est.scopes[k];
+    const row=c.rows.find(r=>r.k===k);
+    return`<div class="scope-card${on?"":" off"}">
+      <div class="scope-head" data-scope="${k}">
+        <label class="toggle" style="pointer-events:none"><input type="checkbox" ${on?"checked":""}/><span class="slider-toggle"></span></label>
+        <span class="scope-name">${SCOPES[k].label}</span>
+        ${on?`<span class="hrs-chip" id="hrs-${k}">${(row?row.h:0).toFixed(1)}h</span>`:""}
+      </div>
+      ${on?scopeFieldsHTML(est,c,k):""}
+    </div>`;
+  }).join("")}
+  <div class="section-label"><span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">TOTALS</span></div>
+  <div id="totalsPanel">${totalsHTML(c)}</div>
+  <div class="est-actions">
+    <button class="btn-primary" id="pushBtn">${onTl?"UPDATE TIMELINE PROJECT":"PUSH TO TIMELINE"}</button>
+    <button class="btn-secondary" id="quoteBtn">PRINT QUOTE</button>
+    <button class="btn-secondary" id="dupBtn">DUPLICATE</button>
+    <button class="btn-danger" id="delEstBtn">DELETE ESTIMATE</button>
+  </div>`;
+}
+function roomSumText(c){
+  return`totals: ${fmtQ(c.q.floorSqft)} floor · ${fmtQ(c.q.wallSqft)} wall · ${fmtQ(c.q.trimLF)} LF · ${fmtQ(c.q.doors)} doors`;
+}
+
+// ══════════════════════ RENDER: QUOTE ══════════════════════
+function quoteHTML(){
+  const est=getEst(ui.quoteId);
+  if(!est)return estListHTML();
+  const S=data.settings;
+  const{lines,total}=quoteLines(est);
+  return`
+  <div class="header no-print" style="padding-top:14px">
+    <button class="back-btn" id="backQuoteBtn">← BACK TO ESTIMATE</button>
+  </div>
+  <div class="quote-page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px">
+      <div>
+        <div style="font-size:22px;font-weight:400">${S.company?esc(S.company):"Estimate"}</div>
+        ${S.company?`<div class="mono" style="font-size:10px;letter-spacing:.1em;color:#8A847A;margin-top:2px">ESTIMATE</div>`:""}
+      </div>
+      <div class="mono" style="font-size:11px;color:#6B6560;text-align:right">${fmtFull(today)}</div>
+    </div>
+    ${est.name?`<div style="font-size:17px;margin-bottom:18px">${esc(est.name)}</div>`:""}
+    ${lines.map(l=>`<div class="q-line"><span>${l.desc}</span><span class="mono" style="font-size:13px;flex-shrink:0">${fmt$(l.amt)}</span></div>`).join("")}
+    <div class="q-total"><span>Total</span><span>${fmt$(total)}</span></div>
+    <div class="mono" style="font-size:9px;color:#A89E94;margin-top:26px;line-height:1.6">Estimate valid for 30 days. Final invoice reflects actual scope. Materials included.</div>
+  </div>
+  <div class="est-actions no-print">
+    <button class="btn-primary" id="printBtn">PRINT / SAVE PDF</button>
+  </div>`;
+}
+
+// ══════════════════════ RENDER: TIMELINE ══════════════════════
+function timelineHTML(){
+  const{projects,nextAvail,daysOut,revTotal}=tlDerived();
+  const availColor=daysOut===0?"#1E8449":"#1A1510";
+  const fPct=d=>((d-7)/83*100).toFixed(1);
+  const bPct=b=>((b)/21*100).toFixed(1);
+  return`
+  <div class="header">
+    <div class="eyebrow">CAPACITY PLANNER</div>
+    <div class="headline">When can<br><em>you start?</em></div>
+  </div>
+  <div class="sticky">
+    <div class="avail-card" style="background:${availColor}">
+      <div class="avail-label" style="color:${daysOut===0?"#A8DFB8":"#8A8070"}">NEXT AVAILABLE</div>
+      <div class="avail-date" style="font-size:${daysOut===0?32:24}px">${daysOut===0?"Available now":fmtFull(nextAvail)}</div>
+      ${daysOut>0?`<div class="avail-sub">${daysOut} days out · ${ui.buffer}d buffer</div>`:""}
+      <button class="copy-btn" id="copyBtn" style="${ui.copied?"background:#2ECC71":""}">${ui.copied?"✓ COPIED":"COPY REPLY"}</button>
+    </div>
+  </div>
+  <div class="rev-panel">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px">
+      <div>
+        <div class="eyebrow">REVENUE NEXT ${ui.forecastDays} DAYS</div>
+        <div style="font-size:30px;font-weight:300;color:#1A1510;line-height:1">${fmtK(revTotal)}</div>
+      </div>
+      <div class="mono" style="font-size:10px;color:#A89E94;padding-bottom:3px">${fmtShort(today)} — ${fmtShort(addDays(today,ui.forecastDays))}</div>
+    </div>
+    <input type="range" id="forecastSlider" min="7" max="90" step="1" value="${ui.forecastDays}"
+      style="background:linear-gradient(to right,#1A1510 ${fPct(ui.forecastDays)}%,#C8C2B8 ${fPct(ui.forecastDays)}%)"/>
+    <div class="buffer-ticks"><span>7d</span><span>30d</span><span>60d</span><span>90d</span></div>
+  </div>
+  <div class="controls">
+    <div class="toggle-wrap">
+      <label class="toggle"><input type="checkbox" id="padToggle" ${ui.showPadding?"checked":""}/><span class="slider-toggle"></span></label>
+      <span class="mono" style="font-size:10px;color:${ui.showPadding?"#1A1510":"#A89E94"};letter-spacing:.08em;transition:color .2s">SHOW PADDING</span>
+    </div>
+    <div id="bufferToggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <span class="mono" style="font-size:10px;color:#8A847A;letter-spacing:.08em">BUFFER</span>
+      <span class="mono" style="font-size:11px;color:#1A1510">${ui.buffer}d ${ui.expandBuffer?"▲":"▼"}</span>
+    </div>
+  </div>
+  ${ui.expandBuffer?`
+  <div class="buffer-section">
+    <input type="range" id="bufferSlider" min="0" max="21" step="1" value="${ui.buffer}"
+      style="background:linear-gradient(to right,#1A1510 ${bPct(ui.buffer)}%,#C8C2B8 ${bPct(ui.buffer)}%)"/>
+    <div class="buffer-ticks"><span>None</span><span>3 weeks</span></div>
+  </div>`:""}
+  <div class="section-label">
+    <span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">PROJECTS — ${projects.length}</span>
+    ${projects.length>1?`<span class="mono" style="font-size:9px;color:#C8C2B8;letter-spacing:.06em">HOLD TO REORDER</span>`:""}
+  </div>
+  ${projects.length===0?`<div class="empty">No projects yet. Add one below, or push an estimate over.</div>`:""}
+  <div id="cardList">
+  ${projects.map((p,i)=>{
+    const color=COLORS[i%COLORS.length];
+    const isDragging=ui.dragIndex===i;
+    const isOver=ui.dragOver===i&&ui.dragIndex!==i;
+    const isActive=ui.dragIndex===i&&ui.dragReady;
+    const displayEnd=ui.showPadding?p.paddedEnd:p.end_date;
+    const padDays=daysBetween(p.end_date,p.paddedEnd);
+    const pRev=revenueInWindow(p,ui.forecastDays);
+    const linked=data.estimates.some(e=>e.projectId===p.id);
+    return`<div class="card${isDragging?" dragging":""}${isOver?" dragover":""}${isActive?" drag-active":""}"
+      data-index="${i}" data-id="${p.id}">
+      <div class="card-inner">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+          <div class="color-bar" style="background:${color};flex:1"></div>
+          <div class="drag-handle">⠿</div>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div class="card-name">${p.name?esc(p.name):'<em style="color:#A89E94">Untitled</em>'}</div>
+            <div class="mono" style="font-size:10px;color:#8A847A;flex-shrink:0;padding-top:2px">${daysBetween(p.start_date,p.end_date)}d</div>
+          </div>
+          <div class="card-dates">
+            ${fmtShort(p.start_date)}<span style="color:#C8C2B8;margin:0 6px">→</span><span style="color:${ui.showPadding&&padDays>0?"#D4860A":"#6B6560"}">${fmtShort(displayEnd)}</span>${ui.showPadding&&padDays>0?`<span style="color:#D4860A;font-size:9px;margin-left:4px">+${padDays}d</span>`:""}${linked?`<span style="color:#2471A3;margin-left:6px">· est</span>`:""}
+          </div>
+          <div class="card-bottom">
+            <div class="conf-track">
+              <div class="track"><div class="track-fill" style="width:${p.confidence}%;background:${color}"></div></div>
+              <span class="mono" style="font-size:10px;color:${confColor(p.confidence)};min-width:28px;text-align:right">${p.confidence}%</span>
+            </div>
+            ${p.value>0?`<div class="rev-chip" style="color:${pRev>0?"#1E8449":"#A89E94"}">${fmtK(p.value)}${pRev>0?"":" later"}</div>`:""}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("")}
+  </div>
+  <button class="add-btn" id="addBtn">+ Add project</button>
+  ${ui.tsheet!==null?`
+  <div class="overlay" id="tlOverlay"></div>
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body">
+      <div class="sheet-title">${ui.tsheet==="add"?"NEW PROJECT":"EDIT PROJECT"}</div>
+      <div class="field">
+        <label>Project name</label>
+        <input type="text" id="pName" value="${esc(ui.tform.name)}" placeholder="e.g. Miller repaint"/>
+      </div>
+      <div class="two-col">
+        <div>
+          <label>Duration (days)</label>
+          <input type="number" id="pDuration" min="1" max="365" value="${ui.tform.duration}"/>
+          <div class="field-hint">${ui.tform.duration===""?"enter days":`≈ ${Math.round(ui.tform.duration/7*10)/10} wks`}</div>
+        </div>
+        <div>
+          <label>Project value ($)</label>
+          <input type="number" id="pValue" min="0" value="${ui.tform.value}" placeholder="0"/>
+          <div class="field-hint">total fee</div>
+        </div>
+      </div>
+      <div class="conf-section">
+        <div class="conf-header">
+          <label style="margin:0">Confidence in timeline</label>
+          <span class="mono" style="font-size:13px;color:${confColor(ui.tform.confidence)}">${ui.tform.confidence}%</span>
+        </div>
+        <input type="range" id="pConf" min="10" max="100" value="${ui.tform.confidence}"
+          style="background:linear-gradient(to right,#1A1510 ${ui.tform.confidence}%,#C8C2B8 ${ui.tform.confidence}%)"/>
+        <div class="field-hint">${confLabel(ui.tform.confidence)}</div>
+      </div>
+      <button class="btn-primary" id="pSaveBtn">${ui.tsheet==="add"?"ADD PROJECT":"SAVE CHANGES"}</button>
+      ${(()=>{
+        if(ui.tsheet==="add")return"";
+        const linkedEst=data.estimates.find(e=>e.projectId===ui.tsheet);
+        return linkedEst?`<button class="btn-secondary" id="pOpenEstBtn">OPEN LINKED ESTIMATE</button>
+        <div class="field-hint" style="margin:-4px 0 10px;text-align:center">edits there push back to this project via "update timeline project"</div>`:"";
+      })()}
+      ${ui.tsheet!=="add"?`<button class="btn-danger" id="pDeleteBtn">REMOVE PROJECT</button>`:""}
+    </div>
+  </div>`:""}`;
+}
+
+// ══════════════════════ RENDER: SETTINGS ══════════════════════
+function settingsFields(){
+  const f=[];
+  f.push({sec:"Business"});
+  f.push({path:"company",label:"Company name (quote header)",text:1,info:"Shown at the top of the printed customer quote. Leave blank for a generic “Estimate” header."});
+  f.push({path:"ratePaint",label:"Paint labor rate ($/hr)",info:"Your billable rate for all painting scopes (walls, ceilings, trim, doors, removals). Multiplied by the painting hours the estimate computes."});
+  f.push({path:"rateDrywall",label:"Drywall labor rate ($/hr)",info:"Your billable rate for all drywall scopes (hang, finish, prime, patch). Kept separate so you can price drywall higher than paint."});
+  f.push({path:"hrsDay",label:"Work hours per day",info:"Productive hours you bill in a day. Used only to convert total labor hours into a day count for the timeline (hours ÷ this)."});
+  f.push({path:"markup",label:"Materials markup (%)",info:"Added on top of your raw material cost to get the customer materials charge. 20 means materials are billed at 1.20× cost. Labor is not marked up here — that’s baked into your hourly rate."});
+  f.push({sec:"Quick-mode factors"});
+  f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode ignores this and measures walls directly."});
+  f.push({path:"trimFactor",label:"Trim LF per floor sq ft",info:"Quick-totals only. Estimates baseboard/casing linear feet from floor area. ~0.33 is a rough average; bump up for lots of windows, doors, or crown."});
+  f.push({sec:"Labor rates (hrs/unit at standard difficulty)"});
+  const LI={walls:"Hours to paint one finished FLOOR sq ft (the rate already assumes a 2-coat baseline; the coats selector scales from there).",
+    ceilings:"Hours to paint one ceiling sq ft, 1-coat baseline. The ceiling coats selector scales this up.",
+    trim:"Hours per linear foot of trim (baseboard, casing, crown).",
+    doors:"Hours per door slab incl. both faces and edges.",
+    popcorn:"Hours per ceiling sq ft to scrape/remove popcorn texture.",
+    wallpaper:"Hours per wall sq ft to strip old wallpaper and prep.",
+    hang:"Hours per drywall sq ft to hang board (screws in, not finished).",
+    finish:"Hours per drywall sq ft to tape and finish to Level 4. The L5 option multiplies this.",
+    prime:"Hours per drywall sq ft to prime new board.",
+    patch:"Hours per repair sq ft — wide range; small holes are much slower per sq ft than big open areas."};
+  SCOPE_ORDER.forEach(k=>f.push({path:"labor."+k,label:`${SCOPES[k].label} — hrs / ${SCOPES[k].unit}`,info:LI[k]}));
+  f.push({sec:"Coats, texture & finish modifiers"});
+  f.push({path:"mult.extraCoatWall",label:"Wall extra-coat labor factor",info:"How much each coat above/below 2 changes wall painting labor. 0.35 → 3 coats is 1.35× and 1 coat is 0.65× the 2-coat rate."});
+  f.push({path:"mult.extraCoatCeil",label:"Ceiling extra-coat labor factor",info:"Same idea for ceilings, measured from a 1-coat baseline. 0.6 → 2 coats is 1.6× and 3 coats is 2.2× the 1-coat rate."});
+  f.push({path:"mult.textureLight",label:"Light-texture paint factor",info:"Extra paint (and a little extra labor) for lightly textured surfaces like orange peel. 1.12 = 12% more paint than smooth."});
+  f.push({path:"mult.textureHeavy",label:"Heavy-texture paint factor",info:"Extra paint for heavily textured surfaces like knockdown. 1.25 = 25% more paint. Labor bump is auto-set to about half the paint bump."});
+  f.push({path:"mult.finishL5lab",label:"Level 5 finish labor factor",info:"Multiplier on drywall finish labor when you pick Level 5 (skim-coated smooth). 1.4 = 40% more finishing time than Level 4."});
+  f.push({path:"mult.finishL5mud",label:"Level 5 mud factor",info:"Extra joint compound for the Level 5 skim coat. 1.35 = 35% more mud than Level 4."});
+  f.push({sec:"Material coverage"});
+  f.push({path:"cov.wallCoatCov",label:"Wall sq ft per gal, per coat",info:"How far one gallon goes on walls in a SINGLE coat. 350 → a 2-coat job covers 175 sq ft/gal. The coats selector and texture factor adjust total gallons automatically."});
+  f.push({path:"cov.ceilCoatCov",label:"Ceiling sq ft per gal, per coat",info:"One gallon’s single-coat ceiling coverage. Total ceiling paint = area × coats ÷ this × texture."});
+  f.push({path:"cov.trimGal",label:"Trim LF per gal",info:"Linear feet of trim one gallon of trim paint covers (2 coats)."});
+  f.push({path:"cov.doorsGal",label:"Doors per gal",info:"Doors one gallon of trim paint covers. Trim and door paint are pooled into one gallon count."});
+  f.push({path:"cov.sheet",label:"Sq ft per drywall sheet",info:"Coverage of one 4×8 sheet = 32 sq ft. Used for sheet counts and to convert finish area into tape rolls."});
+  f.push({path:"cov.waste",label:"Drywall waste (%)",info:"Added to hung sheet count for cuts and offcuts. 10 = order 10% extra board."});
+  f.push({path:"cov.screwSheets",label:"Sheets per lb of screws",info:"How many sheets one pound of drywall screws fastens. ~7 is typical."});
+  f.push({path:"cov.tapeSheets",label:"Sheets per tape roll",info:"Sheets one 500' roll of joint tape covers. ~25 is typical."});
+  f.push({path:"cov.mudSqft",label:"Finish sq ft per mud bucket",info:"Drywall sq ft one 5-gal bucket of all-purpose compound finishes to Level 4. Level 5 uses the mud factor above."});
+  f.push({path:"cov.primeGal",label:"Drywall sq ft per gal primer",info:"Coverage of one gallon of drywall primer on new board."});
+  f.push({path:"cov.removerGal",label:"Wall sq ft per gal remover",info:"Wall sq ft one gallon of wallpaper-remover concentrate treats."});
+  f.push({path:"cov.maskFactor",label:"Masking factor (× ceiling sq ft)",info:"Plastic & masking material as a multiple of ceiling area for popcorn removal. 1.15 = 15% more than the bare ceiling size."});
+  f.push({sec:"Material prices ($)"});
+  f.push({path:"price.wallPaint",label:"Wall paint / gal",info:"Your cost per gallon of wall paint, before markup."});
+  f.push({path:"price.ceilPaint",label:"Ceiling paint / gal",info:"Your cost per gallon of ceiling paint, before markup."});
+  f.push({path:"price.trimPaint",label:"Trim paint / gal",info:"Your cost per gallon of trim/door paint, before markup."});
+  f.push({path:"price.primer",label:"Drywall primer / gal",info:"Your cost per gallon of drywall primer, before markup."});
+  f.push({path:"price.sheet",label:"Drywall sheet (4×8)",info:"Your cost per 4×8 drywall sheet, before markup."});
+  f.push({path:"price.screws",label:"Screws / lb",info:"Your cost per pound of drywall screws, before markup."});
+  f.push({path:"price.tape",label:"Tape / 500' roll",info:"Your cost per 500' roll of joint tape, before markup."});
+  f.push({path:"price.mud",label:"Joint compound / 5-gal bucket",info:"Your cost per 5-gal bucket of all-purpose compound, before markup."});
+  f.push({path:"price.bead",label:"Corner bead / 8' stick",info:"Your cost per 8' stick of corner bead, before markup. One stick per outside corner."});
+  f.push({path:"price.remover",label:"Wallpaper remover / gal",info:"Your cost per gallon of wallpaper-remover concentrate, before markup."});
+  f.push({path:"price.maskSqft",label:"Plastic & masking / sq ft",info:"Your cost per sq ft of plastic and masking for popcorn removal, before markup."});
+  f.push({path:"price.patchSqft",label:"Patch supplies / repair sq ft",info:"Blended material cost per repair sq ft for patch jobs (mud, tape, small board), before markup."});
+  f.push({sec:"Availability reply text"});
+  f.push({path:"reply",label:"Reply when booked out",area:1,info:"Copied by the timeline “Copy reply” button when you have work ahead. Use {date} where you want your next-available date inserted."});
+  f.push({path:"replyNow",label:"Reply when available now",area:1,info:"Copied when your next-available date is today. {date} still works if you want to reference it."});
+  return f;
+}
+function getPath(o,p){return p.split(".").reduce((x,k)=>x&&x[k],o);}
+function setPath(o,p,v){const ks=p.split(".");const last=ks.pop();let x=o;ks.forEach(k=>x=x[k]);x[last]=v;}
+function settingsHTML(){
+  if(!ui.settingsOpen)return"";
+  return`
+  <div class="overlay" id="setOverlay"></div>
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body">
+      <div class="sheet-title">SETTINGS — saved as you type</div>
+      ${settingsFields().map(f=>{
+        if(f.sec)return`<div class="eyebrow" style="margin:20px 0 10px">${f.sec.toUpperCase()}</div>`;
+        const v=getPath(data.settings,f.path);
+        const str=f.text||f.area;
+        const control=f.area
+          ?`<textarea data-set="${f.path}" data-str="1" rows="3">${esc(v)}</textarea>`
+          :`<input type="${f.text?"text":"number"}" ${f.text?"":'step="any" inputmode="decimal"'} ${str?'data-str="1"':""} data-set="${f.path}" value="${str?esc(v):v}"/>`;
+        return`<div class="field" style="margin-bottom:12px">
+          <div class="set-labelrow"><label style="margin:0">${f.label}</label>${f.info?`<button class="info-btn" type="button" data-infobtn>i</button>`:""}</div>
+          ${f.info?`<div class="set-desc" style="display:none">${f.info}</div>`:""}
+          ${control}
+        </div>`;
+      }).join("")}
+      <button class="btn-primary" id="setDoneBtn" style="margin-top:10px">DONE</button>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════ MAIN RENDER + BINDING ══════════════════════
+function render(){
+  // Auth gate: unless the Supabase library failed to load entirely (in which
+  // case we fall back to pure-local mode rather than lock the user out of
+  // their own cached data), the app only renders once signed in.
+  if(!auth.libFailed){
+    if(!auth.ready){
+      $("app").innerHTML=`<div class="header" style="padding-top:56px;text-align:center"><div class="eyebrow">JOBBOOK</div></div>`;
+      return;
+    }
+    if(!auth.session){
+      $("app").innerHTML=authScreenHTML();
+      bindAuthScreen();
+      return;
+    }
+  }
+  let body="";
+  if(ui.tab==="est"){
+    body=ui.view==="editor"?editorHTML():ui.view==="quote"?quoteHTML():estListHTML();
+  }else{
+    body=timelineHTML();
+  }
+  const offlineBanner=auth.libFailed?`<div class="field-hint no-print" style="text-align:center;padding:8px 20px;color:#C0392B">Cloud sync unavailable (offline) — working from local cache only</div>`:"";
+  $("app").innerHTML=tabbarHTML()+offlineBanner+`<div>`+body+`</div>`+settingsHTML();
+  bindShared();
+  if(ui.tab==="est"){
+    if(ui.view==="editor")bindEditor();
+    else if(ui.view==="quote")bindQuote();
+    else bindEstList();
+  }else bindTimeline();
+  bindSettings();
+  updateSyncIndicator();
+}
+
+function bindShared(){
+  $("tabEst")?.addEventListener("click",()=>{ui.tab="est";render();});
+  $("tabTl")?.addEventListener("click",()=>{ui.tab="tl";render();});
+  $("gearBtn")?.addEventListener("click",()=>{ui.settingsOpen=true;render();});
+  $("signOutBtn")?.addEventListener("click",async()=>{
+    if(!confirm("Sign out of JobBook? Your data stays saved in the cloud — signing back in will bring it back."))return;
+    await sb.auth.signOut();
+    data=freshData();
+    try{localStorage.removeItem(STORAGE_KEY);}catch{}
+    ui.tab="est";ui.view="list";
+    // onAuthStateChange (SIGNED_OUT) clears auth.session and re-renders to the auth screen
+  });
+}
+function bindSettings(){
+  $("setOverlay")?.addEventListener("click",closeSettings);
+  $("setDoneBtn")?.addEventListener("click",closeSettings);
+  document.querySelectorAll("[data-set]").forEach(el=>{
+    el.addEventListener("input",()=>{
+      setPath(data.settings,el.dataset.set,el.dataset.str?el.value:num(el.value));
+      save();
+    });
+  });
+  document.querySelectorAll("[data-infobtn]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const desc=el.closest(".field").querySelector(".set-desc");
+      if(!desc)return;
+      const show=desc.style.display==="none";
+      desc.style.display=show?"block":"none";
+      el.classList.toggle("on",show);
+    });
+  });
+}
+function closeSettings(){ui.settingsOpen=false;save();render();}
+
+function bindEstList(){
+  $("newEstBtn")?.addEventListener("click",()=>{
+    const est=newEstimate();
+    data.estimates.push(est);save();
+    ui.view="editor";ui.editId=est.id;render();
+    setTimeout(()=>$("eName")?.focus(),100);
+  });
+  document.querySelectorAll("[data-est]").forEach(el=>{
+    el.addEventListener("click",()=>{ui.view="editor";ui.editId=+el.dataset.est;render();});
+  });
+}
+
+function refreshTotals(){
+  const est=getEst(ui.editId);if(!est)return;
+  const c=compute(est);
+  const st=$("sumTotal");if(st)st.textContent=fmt$(c.total);
+  const sh=$("sumHrs");if(sh)sh.textContent=`${c.totalHrs.toFixed(1)}h · ${c.days}d`;
+  const tp=$("totalsPanel");if(tp)tp.innerHTML=totalsHTML(c);
+  SCOPE_ORDER.forEach(k=>{
+    const chip=$("hrs-"+k);if(!chip)return;
+    const row=c.rows.find(r=>r.k===k);
+    chip.textContent=(row?row.h:0).toFixed(1)+"h";
+  });
+  document.querySelectorAll("[data-q]").forEach(el=>{
+    const k=el.dataset.q;
+    if(!(est.manual&&est.manual[k])&&el!==document.activeElement)el.value=c.q[k]||"";
+  });
+  const rs=$("roomSum");if(rs)rs.textContent=roomSumText(c);
+}
+
+function bindEditor(){
+  const est=getEst(ui.editId);if(!est)return;
+  $("backBtn")?.addEventListener("click",()=>{ui.view="list";render();});
+  $("eName")?.addEventListener("input",e=>{est.name=e.target.value;save();});
+  document.querySelectorAll("[data-mode]").forEach(el=>{
+    el.addEventListener("click",()=>{est.mode=el.dataset.mode;save();render();});
+  });
+  $("qFloor")?.addEventListener("input",e=>{est.quick.floor=e.target.value;save();refreshTotals();});
+  $("addRoomBtn")?.addEventListener("click",()=>{
+    est.rooms=est.rooms||[];
+    est.rooms.push({id:Date.now(),name:"",l:"",w:"",h:8,doors:""});
+    save();render();
+  });
+  document.querySelectorAll("[data-delroom]").forEach(el=>{
+    el.addEventListener("click",e=>{
+      e.stopPropagation();
+      est.rooms=est.rooms.filter(r=>r.id!==+el.dataset.delroom);
+      save();render();
+    });
+  });
+  document.querySelectorAll("[data-rid]").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const r=(est.rooms||[]).find(x=>x.id===+el.dataset.rid);
+      if(!r)return;
+      r[el.dataset.f]=el.value;
+      save();refreshTotals();
+    });
+  });
+  // chip groups that only affect pricing (not which fields show) update in place
+  // so the page doesn't jump back to the top on each tap
+  const chipGroup=(sel,pick)=>document.querySelectorAll(sel).forEach(el=>{
+    el.addEventListener("click",()=>{
+      el.parentElement.querySelectorAll(".chip").forEach(s=>s.classList.remove("on"));
+      el.classList.add("on");
+      pick(el);save();refreshTotals();
+    });
+  });
+  chipGroup("[data-diff]",el=>est.difficulty=el.dataset.diff);
+  chipGroup("[data-tex]",el=>est.texture=el.dataset.tex);
+  chipGroup("[data-wcoats]",el=>est.wallCoats=+el.dataset.wcoats);
+  chipGroup("[data-ccoats]",el=>est.ceilCoats=+el.dataset.ccoats);
+  chipGroup("[data-flevel]",el=>est.finishLevel=+el.dataset.flevel);
+  document.querySelectorAll("[data-scope]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const k=el.dataset.scope;
+      est.scopes[k]=est.scopes[k]?0:1;
+      save();render();
+    });
+  });
+  document.querySelectorAll("[data-q]").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const k=el.dataset.q;
+      est.q[k]=el.value;
+      est.manual=est.manual||{};
+      est.manual[k]=true;
+      const hint=$("hint-"+k);
+      if(hint)hint.innerHTML=`manual · <span class="reset-link" data-reset="${k}">reset to auto</span>`;
+      save();refreshTotals();
+    });
+  });
+  $("pushBtn")?.addEventListener("click",()=>{
+    const c=compute(est);
+    const name=est.name||"Untitled job";
+    const days=Math.max(1,c.days);
+    const existing=data.projects.find(p=>p.id===est.projectId);
+    if(existing){
+      existing.name=name;
+      existing.end_date=toISO(addDays(existing.start_date,days));
+      existing.value=Math.round(c.total);
+    }else{
+      const last=data.projects[data.projects.length-1];
+      const startDate=last?last.end_date:toISO(today);
+      const p={id:data.nextId++,name,start_date:startDate,end_date:toISO(addDays(startDate,days)),confidence:75,value:Math.round(c.total)};
+      data.projects.push(p);
+      est.projectId=p.id;
+    }
+    save();ui.tab="tl";render();
+  });
+  $("quoteBtn")?.addEventListener("click",()=>{ui.view="quote";ui.quoteId=est.id;render();});
+  $("dupBtn")?.addEventListener("click",()=>{
+    const copy=JSON.parse(JSON.stringify(est));
+    copy.id=data.nextEstId++;
+    copy.name=(est.name||"Untitled")+" copy";
+    copy.projectId=null;
+    copy.created=toISO(today);
+    data.estimates.push(copy);
+    save();ui.editId=copy.id;render();
+  });
+  $("delEstBtn")?.addEventListener("click",()=>{
+    if(!confirm("Delete this estimate?"))return;
+    deleteEstimate(est.id);
+    ui.view="list";render();
+  });
+}
+// reset-to-auto links live inside re-rendered hints → delegate once
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-reset]");
+  if(!t)return;
+  const est=getEst(ui.editId);if(!est)return;
+  delete est.manual[t.dataset.reset];
+  save();render();
+});
+
+function bindQuote(){
+  $("backQuoteBtn")?.addEventListener("click",()=>{ui.view="editor";ui.editId=ui.quoteId;render();});
+  $("printBtn")?.addEventListener("click",()=>window.print());
+}
+
+function bindTimeline(){
+  const{nextAvail,daysOut}=tlDerived();
+  const copyText=daysOut===0
+    ?(data.settings.replyNow||"").replace(/\{date\}/g,fmtFull(nextAvail))
+    :(data.settings.reply||"").replace(/\{date\}/g,fmtFull(nextAvail));
+  $("copyBtn")?.addEventListener("click",()=>{
+    navigator.clipboard?.writeText(copyText).catch(()=>{});
+    ui.copied=true;render();
+    setTimeout(()=>{ui.copied=false;render();},2000);
+  });
+  $("forecastSlider")?.addEventListener("input",e=>{ui.forecastDays=+e.target.value;render();});
+  $("padToggle")?.addEventListener("change",e=>{ui.showPadding=e.target.checked;render();});
+  $("bufferToggle")?.addEventListener("click",()=>{ui.expandBuffer=!ui.expandBuffer;render();});
+  $("bufferSlider")?.addEventListener("input",e=>{ui.buffer=+e.target.value;render();});
+  $("addBtn")?.addEventListener("click",()=>{
+    ui.tform={name:"",duration:14,confidence:75,value:""};
+    ui.tsheet="add";render();
+    setTimeout(()=>$("pName")?.focus(),100);
+  });
+  $("tlOverlay")?.addEventListener("click",()=>{ui.tsheet=null;render();});
+  $("pName")?.addEventListener("input",e=>{ui.tform.name=e.target.value;});
+  $("pDuration")?.addEventListener("input",e=>{
+    ui.tform.duration=e.target.value===""?"":+e.target.value;
+    const hint=document.querySelector("#pDuration+.field-hint");
+    if(hint)hint.textContent=ui.tform.duration===""?"enter days":`≈ ${Math.round(ui.tform.duration/7*10)/10} wks`;
+  });
+  $("pDuration")?.addEventListener("focus",e=>e.target.select());
+  $("pDuration")?.addEventListener("blur",e=>{
+    const v=parseInt(e.target.value,10);
+    ui.tform.duration=isNaN(v)||v<1?1:v;
+    e.target.value=ui.tform.duration;
+  });
+  $("pValue")?.addEventListener("input",e=>{ui.tform.value=e.target.value===""?"":+e.target.value;});
+  $("pValue")?.addEventListener("focus",e=>e.target.select());
+  $("pConf")?.addEventListener("input",e=>{
+    ui.tform.confidence=+e.target.value;
+    e.target.style.background=`linear-gradient(to right,#1A1510 ${ui.tform.confidence}%,#C8C2B8 ${ui.tform.confidence}%)`;
+    const label=document.querySelector(".conf-header span");
+    if(label){label.textContent=ui.tform.confidence+"%";label.style.color=confColor(ui.tform.confidence);}
+    const hint=document.querySelector(".conf-section .field-hint");
+    if(hint)hint.textContent=confLabel(ui.tform.confidence);
+  });
+  $("pSaveBtn")?.addEventListener("click",()=>{
+    const duration=Math.max(1,parseInt(ui.tform.duration,10)||1);
+    const value=parseFloat(ui.tform.value)||0;
+    const name=$("pName")?.value||ui.tform.name;
+    if(ui.tsheet==="add"){
+      const last=data.projects[data.projects.length-1];
+      const startDate=last?last.end_date:toISO(today);
+      const endDate=toISO(addDays(startDate,duration));
+      data.projects.push({id:data.nextId++,name,start_date:startDate,end_date:endDate,confidence:ui.tform.confidence,value});
+    }else{
+      const idx=data.projects.findIndex(p=>p.id===ui.tsheet);
+      if(idx>-1){
+        const p=data.projects[idx];
+        data.projects[idx]={...p,name,end_date:toISO(addDays(p.start_date,duration)),confidence:ui.tform.confidence,value};
+      }
+    }
+    save();ui.tsheet=null;render();
+  });
+  $("pOpenEstBtn")?.addEventListener("click",()=>{
+    const linkedEst=data.estimates.find(e=>e.projectId===ui.tsheet);
+    if(!linkedEst)return;
+    ui.tsheet=null;ui.tab="est";ui.view="editor";ui.editId=linkedEst.id;render();
+  });
+  $("pDeleteBtn")?.addEventListener("click",()=>{
+    const pid=ui.tsheet;
+    data.estimates.forEach(e=>{if(e.projectId===pid)e.projectId=null;});
+    deleteProject(pid);
+    ui.tsheet=null;render();
+  });
+  document.querySelectorAll("#cardList .card").forEach(el=>{
+    el.addEventListener("click",()=>{
+      if(ui.dragReady||ui.dragIndex!==null)return;
+      const id=+el.dataset.id;
+      const p=data.projects.find(x=>x.id===id);
+      if(!p)return;
+      ui.tform={name:p.name,duration:daysBetween(p.start_date,p.end_date),confidence:p.confidence,value:p.value||""};
+      ui.tsheet=id;render();
+    });
+  });
+  // Mouse drag: mutate classes live and only re-render on drop — re-rendering
+  // mid-drag destroys the drag source element and cancels the operation.
+  const dcards=[...document.querySelectorAll("#cardList .card")];
+  dcards.forEach((el,i)=>{
+    el.setAttribute("draggable","true");
+    el.addEventListener("dragstart",e=>{
+      ui.dragIndex=i;ui.dragOver=i;
+      e.dataTransfer.effectAllowed="move";
+      try{e.dataTransfer.setData("text/plain",String(i));}catch{}
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragenter",e=>{
+      e.preventDefault();
+      if(ui.dragIndex===null||i===ui.dragIndex)return;
+      ui.dragOver=i;
+      dcards.forEach(c=>c.classList.remove("dragover"));
+      el.classList.add("dragover");
+    });
+    el.addEventListener("dragover",e=>{e.preventDefault();e.dataTransfer.dropEffect="move";});
+    el.addEventListener("dragend",()=>{
+      if(ui.dragIndex!==null&&ui.dragOver!==null&&ui.dragIndex!==ui.dragOver)doReorder(ui.dragIndex,ui.dragOver);
+      ui.dragIndex=null;ui.dragOver=null;ui.dragReady=false;render();
+    });
+  });
+  let longTimer=null;
+  document.querySelectorAll("#cardList .card").forEach((el,i)=>{
+    el.addEventListener("touchstart",()=>{
+      longTimer=setTimeout(()=>{ui.dragIndex=i;ui.dragReady=true;render();},LONG_PRESS);
+    },{passive:true});
+    el.addEventListener("touchmove",e=>{
+      if(!ui.dragReady){clearTimeout(longTimer);return;}
+      e.preventDefault();
+      const y=e.touches[0].clientY;
+      let closest=ui.dragIndex,closestDist=Infinity;
+      document.querySelectorAll("#cardList .card").forEach((ref,j)=>{
+        const rect=ref.getBoundingClientRect();
+        const dist=Math.abs(y-(rect.top+rect.height/2));
+        if(dist<closestDist){closestDist=dist;closest=j;}
+      });
+      if(ui.dragOver!==closest){ui.dragOver=closest;render();}
+    },{passive:false});
+    el.addEventListener("touchend",()=>{
+      clearTimeout(longTimer);
+      if(ui.dragReady&&ui.dragIndex!==null&&ui.dragOver!==null&&ui.dragIndex!==ui.dragOver)
+        doReorder(ui.dragIndex,ui.dragOver);
+      ui.dragIndex=null;ui.dragOver=null;ui.dragReady=false;render();
+    });
+  });
+}
+function doReorder(from,to){
+  const arr=[...data.projects];
+  const[item]=arr.splice(from,1);
+  arr.splice(to,0,item);
+  data.projects=arr;
+  save();
+}
+
+// ══════════════════════ BOOTSTRAP ══════════════════════
+load(); // local cache first — instant, works fully offline once signed in before
+render(); // shows the "checking session" placeholder immediately
+
+async function initAuth(){
+  if(!window.supabase){
+    // CDN script didn't load (offline on a device that's never connected
+    // before) — fall back to local-only mode rather than lock the user out.
+    auth.libFailed=true;auth.ready=true;render();
+    return;
+  }
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  try{
+    const{data:{session}}=await sb.auth.getSession(); // reads local storage, no network needed
+    auth.session=session;
+  }catch{}
+  auth.ready=true;render();
+  if(auth.session)pullFromCloud();
+  sb.auth.onAuthStateChange((event,session)=>{
+    const wasSignedOut=!auth.session;
+    auth.session=session;
+    if(event==="SIGNED_IN"&&wasSignedOut)pullFromCloud();
+    render();
+  });
+  window.addEventListener("online",()=>{if(auth.session)queueCloudSync();});
+}
+initAuth();
+</script>
+</body>
+</html>
