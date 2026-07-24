@@ -185,7 +185,7 @@ let data={settings:defaultSettings(),estimates:[],projects:[],nextId:1,nextEstId
 
 // auth/cloud sync state — separate from `data` since it's not persisted as-is
 let sb=null;
-let auth={ready:false,session:null,libFailed:false,email:"",otpSent:false,sending:false,error:"",mode:"otp"};
+let auth={ready:false,session:null,libFailed:false,email:"",otpSent:false,sending:false,error:"",info:"",mode:"otp"};
 let cloud={status:"idle",lastSync:null,error:null}; // idle|syncing|synced|error|offline
 
 function deepMerge(base,over){
@@ -484,14 +484,16 @@ function tabbarHTML(){
 
 // ══════════════════════ RENDER: AUTH ══════════════════════
 function authScreenHTML(){
-  if(auth.mode==="password"){
+  if(auth.mode==="password"||auth.mode==="signup"){
+    const isSignup=auth.mode==="signup";
     return`
     <div class="header" style="padding-top:56px;text-align:center">
       <div class="eyebrow">JOBBOOK</div>
-      <div class="headline">Sign in with<br><em>your password</em></div>
+      <div class="headline">${isSignup?"Create your<br><em>account</em>":"Sign in with<br><em>your password</em>"}</div>
     </div>
     <div class="auth-wrap">
       ${auth.error?`<div class="field-hint" style="color:#C0392B;margin-bottom:12px;font-size:11px">${esc(auth.error)}</div>`:""}
+      ${auth.info?`<div class="field-hint" style="color:#1E8449;margin-bottom:12px;font-size:11px">${esc(auth.info)}</div>`:""}
       <div class="field">
         <label>Email</label>
         <input type="text" id="authEmail" value="${esc(auth.email)}" placeholder="you@example.com" inputmode="email" autocapitalize="off" autocorrect="off"/>
@@ -499,10 +501,20 @@ function authScreenHTML(){
       <div class="field">
         <label>Password</label>
         <input type="password" id="authPassword" placeholder="••••••••"/>
-        <div class="field-hint">Set this in the Supabase dashboard under Authentication → Users → Add user.</div>
+        ${!isSignup?`<div class="field-hint">Set this in the Supabase dashboard under Authentication → Users → Add user, or create your own account below.</div>`:""}
       </div>
+      ${isSignup?`
+      <div class="field">
+        <label>Confirm password</label>
+        <input type="password" id="authPassword2" placeholder="••••••••"/>
+      </div>
+      <button class="btn-primary" id="signUpBtn" ${auth.sending?"disabled":""}>${auth.sending?"CREATING…":"CREATE ACCOUNT"}</button>
+      <button class="btn-secondary" id="toggleSignupBtn">ALREADY HAVE AN ACCOUNT? SIGN IN</button>
+      `:`
       <button class="btn-primary" id="passwordSignInBtn" ${auth.sending?"disabled":""}>${auth.sending?"SIGNING IN…":"SIGN IN"}</button>
+      <button class="btn-secondary" id="toggleSignupBtn">DON'T HAVE AN ACCOUNT? SIGN UP</button>
       <button class="btn-secondary" id="usePasswordBtn">USE EMAIL CODE INSTEAD</button>
+      `}
     </div>`;
   }
   return`
@@ -535,11 +547,19 @@ function authScreenHTML(){
 }
 function bindAuthScreen(){
   $("authEmail")?.addEventListener("input",e=>{auth.email=e.target.value;});
-  $("authEmail")?.addEventListener("keydown",e=>{if(e.key==="Enter")(auth.mode==="password"?$("passwordSignInBtn"):$("sendCodeBtn"))?.click();});
-  $("authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("passwordSignInBtn")?.click();});
+  $("authEmail")?.addEventListener("keydown",e=>{
+    if(e.key!=="Enter")return;
+    (auth.mode==="signup"?$("signUpBtn"):auth.mode==="password"?$("passwordSignInBtn"):$("sendCodeBtn"))?.click();
+  });
+  $("authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")(auth.mode==="signup"?$("signUpBtn"):$("passwordSignInBtn"))?.click();});
+  $("authPassword2")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("signUpBtn")?.click();});
   $("usePasswordBtn")?.addEventListener("click",()=>{
     auth.mode=auth.mode==="password"?"otp":"password";
-    auth.error="";auth.otpSent=false;render();
+    auth.error="";auth.info="";auth.otpSent=false;render();
+  });
+  $("toggleSignupBtn")?.addEventListener("click",()=>{
+    auth.mode=auth.mode==="signup"?"password":"signup";
+    auth.error="";auth.info="";render();
   });
   $("passwordSignInBtn")?.addEventListener("click",async()=>{
     const email=($("authEmail")?.value||"").trim();
@@ -550,6 +570,28 @@ function bindAuthScreen(){
       const{error}=await sb.auth.signInWithPassword({email,password});
       if(error)throw error;
       // success: onAuthStateChange fires SIGNED_IN, which pulls from cloud and re-renders
+    }catch(err){
+      auth.error=err&&err.message||String(err);
+      auth.sending=false;render();
+    }
+  });
+  $("signUpBtn")?.addEventListener("click",async()=>{
+    const email=($("authEmail")?.value||"").trim();
+    const password=$("authPassword")?.value||"";
+    const password2=$("authPassword2")?.value||"";
+    if(!email||!password){auth.error="Enter an email and password.";render();return;}
+    if(password.length<6){auth.error="Password must be at least 6 characters.";render();return;}
+    if(password!==password2){auth.error="Passwords don't match.";render();return;}
+    auth.email=email;auth.sending=true;auth.error="";auth.info="";render();
+    try{
+      const{data,error}=await sb.auth.signUp({email,password});
+      if(error)throw error;
+      if(data.session){
+        // email confirmation is off — signed in immediately, onAuthStateChange takes it from here
+      }else{
+        auth.info="Account created — check your email to confirm before signing in.";
+        auth.mode="password";auth.sending=false;render();
+      }
     }catch(err){
       auth.error=err&&err.message||String(err);
       auth.sending=false;render();
