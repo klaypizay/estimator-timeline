@@ -487,7 +487,10 @@ function authScreenHTML(){
   if(auth.mode==="password"||auth.mode==="signup"){
     const isSignup=auth.mode==="signup";
     return`
-    <div class="header" style="padding-top:56px;text-align:center">
+    <div class="header" style="padding-top:32px">
+      <button class="back-btn" id="authBackBtn">← BACK</button>
+    </div>
+    <div class="header" style="padding-top:16px;text-align:center">
       <div class="eyebrow">JOBBOOK</div>
       <div class="headline">${isSignup?"Create your<br><em>account</em>":"Sign in with<br><em>your password</em>"}</div>
     </div>
@@ -513,7 +516,6 @@ function authScreenHTML(){
       `:`
       <button class="btn-primary" id="passwordSignInBtn" ${auth.sending?"disabled":""}>${auth.sending?"SIGNING IN…":"SIGN IN"}</button>
       <button class="btn-secondary" id="toggleSignupBtn">DON'T HAVE AN ACCOUNT? SIGN UP</button>
-      <button class="btn-secondary" id="usePasswordBtn">USE EMAIL CODE INSTEAD</button>
       `}
     </div>`;
   }
@@ -524,6 +526,7 @@ function authScreenHTML(){
   </div>
   <div class="auth-wrap">
     ${auth.error?`<div class="field-hint" style="color:#C0392B;margin-bottom:12px;font-size:11px">${esc(auth.error)}</div>`:""}
+    ${auth.info?`<div class="field-hint" style="color:#1E8449;margin-bottom:12px;font-size:11px">${esc(auth.info)}</div>`:""}
     ${!auth.otpSent?`
     <div class="field">
       <label>Email</label>
@@ -533,6 +536,7 @@ function authScreenHTML(){
     <div style="text-align:center;margin:14px 0;color:#A89E94;font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.1em">— OR —</div>
     <button class="btn-secondary" id="googleBtn">CONTINUE WITH GOOGLE</button>
     <button class="btn-secondary" id="usePasswordBtn">SIGN IN WITH PASSWORD</button>
+    <button class="btn-secondary" id="goSignupBtn">CREATE AN ACCOUNT</button>
     <div class="field-hint" style="text-align:center;margin-top:8px">Google sign-in needs this page served from a real URL (not opened as a local file).</div>
     `:`
     <div class="field-hint" style="margin-bottom:10px">Code sent to ${esc(auth.email)} — check your inbox.</div>
@@ -554,7 +558,15 @@ function bindAuthScreen(){
   $("authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")(auth.mode==="signup"?$("signUpBtn"):$("passwordSignInBtn"))?.click();});
   $("authPassword2")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("signUpBtn")?.click();});
   $("usePasswordBtn")?.addEventListener("click",()=>{
-    auth.mode=auth.mode==="password"?"otp":"password";
+    auth.mode="password";
+    auth.error="";auth.info="";auth.otpSent=false;render();
+  });
+  $("goSignupBtn")?.addEventListener("click",()=>{
+    auth.mode="signup";
+    auth.error="";auth.info="";auth.otpSent=false;render();
+  });
+  $("authBackBtn")?.addEventListener("click",()=>{
+    auth.mode="otp";
     auth.error="";auth.info="";auth.otpSent=false;render();
   });
   $("toggleSignupBtn")?.addEventListener("click",()=>{
