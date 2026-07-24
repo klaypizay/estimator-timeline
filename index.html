@@ -185,7 +185,7 @@ let data={settings:defaultSettings(),estimates:[],projects:[],nextId:1,nextEstId
 
 // auth/cloud sync state — separate from `data` since it's not persisted as-is
 let sb=null;
-let auth={ready:false,session:null,libFailed:false,email:"",otpSent:false,sending:false,error:""};
+let auth={ready:false,session:null,libFailed:false,email:"",otpSent:false,sending:false,error:"",mode:"otp"};
 let cloud={status:"idle",lastSync:null,error:null}; // idle|syncing|synced|error|offline
 
 function deepMerge(base,over){
@@ -484,6 +484,27 @@ function tabbarHTML(){
 
 // ══════════════════════ RENDER: AUTH ══════════════════════
 function authScreenHTML(){
+  if(auth.mode==="password"){
+    return`
+    <div class="header" style="padding-top:56px;text-align:center">
+      <div class="eyebrow">JOBBOOK</div>
+      <div class="headline">Sign in with<br><em>your password</em></div>
+    </div>
+    <div class="auth-wrap">
+      ${auth.error?`<div class="field-hint" style="color:#C0392B;margin-bottom:12px;font-size:11px">${esc(auth.error)}</div>`:""}
+      <div class="field">
+        <label>Email</label>
+        <input type="text" id="authEmail" value="${esc(auth.email)}" placeholder="you@example.com" inputmode="email" autocapitalize="off" autocorrect="off"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="authPassword" placeholder="••••••••"/>
+        <div class="field-hint">Set this in the Supabase dashboard under Authentication → Users → Add user.</div>
+      </div>
+      <button class="btn-primary" id="passwordSignInBtn" ${auth.sending?"disabled":""}>${auth.sending?"SIGNING IN…":"SIGN IN"}</button>
+      <button class="btn-secondary" id="usePasswordBtn">USE EMAIL CODE INSTEAD</button>
+    </div>`;
+  }
   return`
   <div class="header" style="padding-top:56px;text-align:center">
     <div class="eyebrow">JOBBOOK</div>
@@ -499,6 +520,7 @@ function authScreenHTML(){
     <button class="btn-primary" id="sendCodeBtn" ${auth.sending?"disabled":""}>${auth.sending?"SENDING…":"EMAIL ME A CODE"}</button>
     <div style="text-align:center;margin:14px 0;color:#A89E94;font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.1em">— OR —</div>
     <button class="btn-secondary" id="googleBtn">CONTINUE WITH GOOGLE</button>
+    <button class="btn-secondary" id="usePasswordBtn">SIGN IN WITH PASSWORD</button>
     <div class="field-hint" style="text-align:center;margin-top:8px">Google sign-in needs this page served from a real URL (not opened as a local file).</div>
     `:`
     <div class="field-hint" style="margin-bottom:10px">Code sent to ${esc(auth.email)} — check your inbox.</div>
@@ -513,7 +535,26 @@ function authScreenHTML(){
 }
 function bindAuthScreen(){
   $("authEmail")?.addEventListener("input",e=>{auth.email=e.target.value;});
-  $("authEmail")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("sendCodeBtn")?.click();});
+  $("authEmail")?.addEventListener("keydown",e=>{if(e.key==="Enter")(auth.mode==="password"?$("passwordSignInBtn"):$("sendCodeBtn"))?.click();});
+  $("authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("passwordSignInBtn")?.click();});
+  $("usePasswordBtn")?.addEventListener("click",()=>{
+    auth.mode=auth.mode==="password"?"otp":"password";
+    auth.error="";auth.otpSent=false;render();
+  });
+  $("passwordSignInBtn")?.addEventListener("click",async()=>{
+    const email=($("authEmail")?.value||"").trim();
+    const password=$("authPassword")?.value||"";
+    if(!email||!password){auth.error="Enter both email and password.";render();return;}
+    auth.email=email;auth.sending=true;auth.error="";render();
+    try{
+      const{error}=await sb.auth.signInWithPassword({email,password});
+      if(error)throw error;
+      // success: onAuthStateChange fires SIGNED_IN, which pulls from cloud and re-renders
+    }catch(err){
+      auth.error=err&&err.message||String(err);
+      auth.sending=false;render();
+    }
+  });
   $("sendCodeBtn")?.addEventListener("click",async()=>{
     const email=($("authEmail")?.value||"").trim();
     if(!email){auth.error="Enter an email address.";render();return;}
