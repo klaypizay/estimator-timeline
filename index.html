@@ -1009,7 +1009,10 @@ function timelineHTML(){
         if(ui.tsheet==="add")return"";
         const linkedEst=data.estimates.find(e=>e.projectId===ui.tsheet);
         return linkedEst?`<button class="btn-secondary" id="pOpenEstBtn">OPEN LINKED ESTIMATE</button>
-        <div class="field-hint" style="margin:-4px 0 10px;text-align:center">edits there push back to this project via "update timeline project"</div>`:"";
+        <button class="btn-secondary" id="pCloneEstBtn">CLONE AS NEW ESTIMATE</button>
+        <div class="field-hint" style="margin:-4px 0 10px;text-align:center">open: edits push back to this project · clone: separate copy to price an alternative</div>`
+        :`<button class="btn-secondary" id="pMakeEstBtn">EDIT AS ESTIMATE</button>
+        <div class="field-hint" style="margin:-4px 0 10px;text-align:center">creates a linked estimate for this job — price it there, then "update timeline project" pushes back</div>`;
       })()}
       ${ui.tsheet!=="add"?`<button class="btn-danger" id="pDeleteBtn">REMOVE PROJECT</button>`:""}
     </div>
@@ -1413,6 +1416,33 @@ function bindTimeline(){
     const linkedEst=data.estimates.find(e=>e.projectId===ui.tsheet);
     if(!linkedEst)return;
     ui.tsheet=null;ui.tab="est";ui.view="editor";ui.editId=linkedEst.id;render();
+  });
+  // clone the linked estimate as an unlinked copy — an alternative option for
+  // the same job; pushing the clone later creates its own timeline project
+  $("pCloneEstBtn")?.addEventListener("click",()=>{
+    const linkedEst=data.estimates.find(e=>e.projectId===ui.tsheet);
+    if(!linkedEst)return;
+    const copy=JSON.parse(JSON.stringify(linkedEst));
+    copy.id=data.nextEstId++;
+    copy.name=(linkedEst.name||"Untitled")+" (option)";
+    copy.projectId=null;
+    copy.created=toISO(today);
+    data.estimates.push(copy);
+    save();
+    ui.tsheet=null;ui.tab="est";ui.view="editor";ui.editId=copy.id;render();
+  });
+  // a timeline-only job gets a fresh estimate linked to it, so it can be
+  // priced properly and pushed back onto the same card
+  $("pMakeEstBtn")?.addEventListener("click",()=>{
+    const p=data.projects.find(x=>x.id===ui.tsheet);
+    if(!p)return;
+    const est=newEstimate();
+    est.name=p.name||"";
+    est.projectId=p.id;
+    data.estimates.push(est);
+    save();
+    ui.tsheet=null;ui.tab="est";ui.view="editor";ui.editId=est.id;render();
+    setTimeout(()=>$("eName")?.focus(),100);
   });
   $("pDeleteBtn")?.addEventListener("click",()=>{
     const pid=ui.tsheet;
