@@ -100,6 +100,8 @@
   .tot-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'Azeret Mono',monospace;font-size:11px;color:#6B6560;padding:3px 0;gap:12px;}
   .tot-row .amt{color:#1A1510;flex-shrink:0;}
   .tot-sub{border-top:1px solid #D5CFC4;margin-top:6px;padding-top:8px;font-size:12px;color:#1A1510;}
+  input.tot-edit{width:44px;background:#F5F1EB;border:1px solid #C8C2B8;border-radius:5px;padding:2px 5px;font-family:'Azeret Mono',monospace;font-size:11px;text-align:right;color:#1A1510;outline:none;}
+  input.tot-edit:focus{border-color:#1A1510;}
   .tot-total{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid #1A1510;margin-top:10px;padding-top:10px;}
   .reset-link{color:#C0392B;cursor:pointer;text-decoration:underline;}
   .est-actions{padding:8px 16px 0;}
@@ -793,13 +795,13 @@ function totalsHTML(c){
     ${c.pickup>0?`<div class="tot-row"><span>Materials pickup & staging</span><span class="amt">${c.pickup.toFixed(1)}h</span></div>`:""}
     ${c.daily>0?`<div class="tot-row"><span>Daily setup / teardown</span><span class="amt">${c.daily.toFixed(1)}h</span></div>`:""}
     ${c.cleanup>0?`<div class="tot-row"><span>Final cleanup & haul-off</span><span class="amt">${c.cleanup.toFixed(1)}h</span></div>`:""}
-    ${c.hrs.paint>0?`<div class="tot-row tot-sub"><span>Paint · ${c.hrs.paint.toFixed(1)}h × ${fmt$(S.ratePaint)}/hr</span><span class="amt">${fmt$(c.laborPaint)}</span></div>`:""}
-    ${c.hrs.drywall>0?`<div class="tot-row${c.hrs.paint>0?"":" tot-sub"}"><span>Drywall · ${c.hrs.drywall.toFixed(1)}h × ${fmt$(S.rateDrywall)}/hr</span><span class="amt">${fmt$(c.laborDry)}</span></div>`:""}
+    ${c.hrs.paint>0?`<div class="tot-row tot-sub"><span>Paint · ${c.hrs.paint.toFixed(1)}h × $<input class="tot-edit" type="text" inputmode="decimal" data-tset="ratePaint" value="${S.ratePaint}"/>/hr</span><span class="amt">${fmt$(c.laborPaint)}</span></div>`:""}
+    ${c.hrs.drywall>0?`<div class="tot-row${c.hrs.paint>0?"":" tot-sub"}"><span>Drywall · ${c.hrs.drywall.toFixed(1)}h × $<input class="tot-edit" type="text" inputmode="decimal" data-tset="rateDrywall" value="${S.rateDrywall}"/>/hr</span><span class="amt">${fmt$(c.laborDry)}</span></div>`:""}
     <div class="eyebrow" style="margin-top:16px">MATERIALS</div>
     ${c.mats.length===0?`<div class="tot-row"><span style="font-style:italic">none</span></div>`:""}
     ${c.mats.map(m=>`<div class="tot-row"><span>${m.label} · ${m.qty%1?m.qty.toFixed(1):fmtQ(m.qty)} ${m.unit}</span><span class="amt">${fmt$(m.cost)}</span></div>`).join("")}
-    ${c.matCost>0?`<div class="tot-row tot-sub"><span>Materials + ${S.markup}% markup</span><span class="amt">${fmt$(c.matCharge)}</span></div>`:""}
-    ${c.profit>0?`<div class="tot-row tot-sub"><span>Profit margin · ${c.marginPct}% on cost</span><span class="amt">${fmt$(c.profit)}</span></div>`:""}
+    ${c.matCost>0?`<div class="tot-row tot-sub"><span>Materials + <input class="tot-edit" type="text" inputmode="decimal" data-tset="markup" value="${S.markup}"/>% markup</span><span class="amt">${fmt$(c.matCharge)}</span></div>`:""}
+    ${c.base>0?`<div class="tot-row tot-sub"><span>Profit margin · <input class="tot-edit" type="text" inputmode="decimal" data-tset="profitMargin" value="${c.marginPct}"/>% on cost</span><span class="amt">${fmt$(c.profit)}</span></div>`:""}
     <div class="tot-total">
       <span class="mono" style="font-size:11px;letter-spacing:.1em">TOTAL</span>
       <span style="font-size:26px;font-weight:300">${fmt$(c.total)}</span>
@@ -1307,7 +1309,20 @@ function refreshTotals(){
   const c=compute(est);
   const st=$("sumTotal");if(st)st.textContent=fmt$(c.total);
   const sh=$("sumHrs");if(sh)sh.textContent=`${c.totalHrs.toFixed(1)}h · ${c.days}d`;
-  const tp=$("totalsPanel");if(tp)tp.innerHTML=totalsHTML(c);
+  const tp=$("totalsPanel");
+  if(tp){
+    // an inline rate/markup/margin field may be the thing being typed in —
+    // re-render the panel, then put focus and cursor back where they were
+    const act=document.activeElement;
+    const tkey=act&&act.dataset?act.dataset.tset:null;
+    let sel=null;
+    if(tkey){try{sel=[act.selectionStart,act.selectionEnd];}catch{}}
+    tp.innerHTML=totalsHTML(c);
+    if(tkey){
+      const el2=tp.querySelector(`[data-tset="${tkey}"]`);
+      if(el2){el2.focus();if(sel){try{el2.setSelectionRange(sel[0],sel[1]);}catch{}}}
+    }
+  }
   SCOPE_ORDER.forEach(k=>{
     const chip=$("hrs-"+k);if(!chip)return;
     const row=c.rows.find(r=>r.k===k);
@@ -1421,6 +1436,22 @@ document.addEventListener("click",e=>{
   const est=getEst(ui.editId);if(!est)return;
   delete est.manual[t.dataset.reset];
   save();render();
+});
+// inline rate/markup/margin fields in the totals panel write straight to the
+// same global settings as the settings sheet; delegated because the panel is
+// re-rendered on every keystroke elsewhere in the editor
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(!t.dataset||!t.dataset.tset)return;
+  const raw=t.value.trim();
+  if(raw==="")return; // field cleared mid-edit — wait for a number
+  const n=num(raw);
+  if(n<0)return;
+  setPath(data.settings,t.dataset.tset,n);
+  save();
+  // refresh totals unless the text is a partial number like "7." — re-rendering
+  // the field's value would eat the trailing dot mid-typing
+  if(String(n)===raw)refreshTotals();
 });
 
 function bindQuote(){
