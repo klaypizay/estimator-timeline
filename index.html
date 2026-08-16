@@ -96,7 +96,7 @@
   .scope-name{flex:1;font-size:16px;color:#1A1510;}
   .hrs-chip{font-family:'Azeret Mono',monospace;font-size:11px;color:#1A1510;background:#F5F1EB;border:1px solid #D5CFC4;border-radius:6px;padding:2px 7px;}
   .qty-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
-  .room-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;}
+  .room-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;}
   .tot-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'Azeret Mono',monospace;font-size:11px;color:#6B6560;padding:3px 0;gap:12px;}
   .tot-row .amt{color:#1A1510;flex-shrink:0;}
   .tot-sub{border-top:1px solid #D5CFC4;margin-top:6px;padding-top:8px;font-size:12px;color:#1A1510;}
@@ -166,7 +166,7 @@ const SCOPE_QTY={walls:"floorSqft",ceilings:"ceilSqft",trim:"trimLF",doors:"door
 function defaultSettings(){return{
   company:"",
   ratePaint:65, rateDrywall:70, hrsDay:8, dryDays:2, markup:20, profitMargin:80,
-  wallFactor:2.4, trimFactor:0.33,
+  wallFactor:2.4, trimFactor:0.33, doorCasingLF:17, windowCasingLF:14,
   labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:1/150,finish:1/80,prime:1/300,patch:.15},
   // site prep: per-scope rates scale with the same quantities as the work
   // (masking is per sq ft, not per coat); pickup/daily/cleanup are job overhead
@@ -342,22 +342,26 @@ function diffFactor(k,diff){
 function effQ(est){
   const S=data.settings,man=est.manual||{},a={};
   if(est.mode==="rooms"){
-    let f=0,w=0,t=0,d=0;
+    let f=0,w=0,t=0,d=0,wn=0;
     (est.rooms||[]).forEach(r=>{
       const L=num(r.l),W=num(r.w),H=num(r.h),dr=num(r.doors);
-      f+=L*W;w+=Math.max(0,2*(L+W)*H-dr*20);t+=2*(L+W);d+=dr;
+      f+=L*W;w+=Math.max(0,2*(L+W)*H-dr*20);t+=2*(L+W);d+=dr;wn+=num(r.wins);
     });
-    a.floorSqft=Math.round(f);a.wallSqft=Math.round(w);a.ceilSqft=Math.round(f);a.trimLF=Math.round(t);a.doors=d;
+    a.floorSqft=Math.round(f);a.wallSqft=Math.round(w);a.ceilSqft=Math.round(f);a.trimLF=Math.round(t);a.doors=d;a.windows=wn;
   }else{
     const f=num(est.quick&&est.quick.floor);
-    a.floorSqft=f;a.wallSqft=Math.round(f*S.wallFactor);a.ceilSqft=f;a.trimLF=Math.round(f*S.trimFactor);a.doors=0;
+    a.floorSqft=f;a.wallSqft=Math.round(f*S.wallFactor);a.ceilSqft=f;a.trimLF=Math.round(f*S.trimFactor);a.doors=0;a.windows=0;
   }
   const q={};
   const eff=(k,av)=>{q[k]=man[k]?num(est.q[k]):av;};
   eff("floorSqft",a.floorSqft);eff("wallSqft",a.wallSqft);eff("ceilSqft",a.ceilSqft);
-  eff("trimLF",a.trimLF);eff("doors",a.doors);
+  eff("doors",a.doors);eff("windows",a.windows);
+  // trim = baseboard + door & window casings from the effective counts
+  eff("trimLF",Math.round(a.trimLF+q.doors*(S.doorCasingLF||0)+q.windows*(S.windowCasingLF||0)));
   eff("popcornSqft",q.ceilSqft);eff("wallpaperSqft",q.wallSqft);
-  eff("hangSqft",0);eff("corners",0);
+  // full-room board: walls + ceiling of the measured space (quick mode ≈ 3.4× floor)
+  eff("hangSqft",q.wallSqft+q.ceilSqft);
+  eff("corners",0);
   eff("finishSqft",q.hangSqft);eff("primeSqft",q.finishSqft);
   eff("patchSqft",0);
   return q;
@@ -458,7 +462,7 @@ function quoteLines(est){
     switch(r.k){
       case"walls":desc=`Paint interior walls, ${coatWord(wallCoats(est))}${texWord} — ${fmtQ(c.q.wallSqft)} sq ft`;break;
       case"ceilings":desc=`Paint ceilings, ${coatWord(ceilCoats(est))}${texWord} — ${n} sq ft`;break;
-      case"trim":desc=`Paint trim — ${n} linear ft`;break;
+      case"trim":desc=`Paint trim & casings — ${n} linear ft`;break;
       case"doors":desc=`Paint doors — ${n} door${r.qty===1?"":"s"}`;break;
       case"popcorn":desc=`Popcorn ceiling removal — ${n} sq ft`;break;
       case"wallpaper":desc=`Wallpaper removal — ${n} sq ft`;break;
@@ -760,7 +764,8 @@ function scopeFieldsHTML(est,c,k){
     case"walls":return`<div class="qty-grid">${qtyField(est,c,"floorSqft","Floor sq ft (labor)")}${qtyField(est,c,"wallSqft","Wall sq ft (paint)")}</div>
       ${coatsChips("data-wcoats",wallCoats(est))}`;
     case"ceilings":return`<div class="qty-grid">${qtyField(est,c,"ceilSqft","Ceiling sq ft")}${coatsChips("data-ccoats",ceilCoats(est))}</div>`;
-    case"trim":return`<div class="qty-grid">${qtyField(est,c,"trimLF","Trim LF")}</div>`;
+    case"trim":return`<div class="qty-grid">${qtyField(est,c,"trimLF","Trim LF")}${qtyField(est,c,"windows","Windows (casing)")}</div>
+      <div class="field-hint">trim LF auto = baseboard + ${data.settings.doorCasingLF} LF per door casing + ${data.settings.windowCasingLF} LF per window casing</div>`;
     case"doors":return`<div class="qty-grid">${qtyField(est,c,"doors","Door count")}</div>`;
     case"popcorn":return`<div class="qty-grid">${qtyField(est,c,"popcornSqft","Ceiling sq ft")}</div>`;
     case"wallpaper":return`<div class="qty-grid">${qtyField(est,c,"wallpaperSqft","Wall sq ft")}</div>`;
@@ -851,6 +856,7 @@ function editorHTML(){
           <div><label>W ft</label><input type="number" step="any" inputmode="decimal" data-rid="${r.id}" data-f="w" value="${r.w||""}"/></div>
           <div><label>H ft</label><input type="number" step="any" inputmode="decimal" data-rid="${r.id}" data-f="h" value="${r.h||""}"/></div>
           <div><label>Doors</label><input type="number" step="1" inputmode="numeric" data-rid="${r.id}" data-f="doors" value="${r.doors||""}"/></div>
+          <div><label>Win</label><input type="number" step="1" inputmode="numeric" data-rid="${r.id}" data-f="wins" value="${r.wins||""}"/></div>
         </div>
       </div>`).join("")}
       <button class="btn-secondary" id="addRoomBtn" style="margin-bottom:0">+ ADD ROOM</button>
@@ -898,7 +904,7 @@ function editorHTML(){
   </div>`;
 }
 function roomSumText(c){
-  return`totals: ${fmtQ(c.q.floorSqft)} floor · ${fmtQ(c.q.wallSqft)} wall · ${fmtQ(c.q.trimLF)} LF · ${fmtQ(c.q.doors)} doors`;
+  return`totals: ${fmtQ(c.q.floorSqft)} floor · ${fmtQ(c.q.wallSqft)} wall · ${fmtQ(c.q.trimLF)} LF · ${fmtQ(c.q.doors)} doors · ${fmtQ(c.q.windows)} win`;
 }
 
 // ══════════════════════ RENDER: QUOTE ══════════════════════
@@ -1076,9 +1082,11 @@ function settingsFields(){
   f.push({path:"dryDays",label:"Mud drying days",info:"Extra calendar days added to a job's duration when it includes drywall finishing or patching — coats have to dry between hands-on sessions. Affects the day count and timeline duration only, never the price. Set 0 to disable (e.g. if you run hot mud same-day)."});
   f.push({path:"markup",label:"Materials markup (%)",info:"Added on top of your raw material cost to get the customer materials charge. 20 means materials are billed at 1.20× cost. Labor is not marked up here — that’s baked into your hourly rate."});
   f.push({path:"profitMargin",label:"Profit margin (%)",info:"Company profit added on top of the whole job — labor plus materials (including their markup). 80 means every job is billed at 1.8× cost, which works out to ≈44% margin of the final price. It's folded proportionally into the customer quote's line items, never shown as its own line. Set 0 if your hourly rates already have profit built in."});
-  f.push({sec:"Quick-mode factors"});
-  f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode ignores this and measures walls directly."});
-  f.push({path:"trimFactor",label:"Trim LF per floor sq ft",info:"Quick-totals only. Estimates baseboard/casing linear feet from floor area. ~0.33 is a rough average; bump up for lots of windows, doors, or crown."});
+  f.push({sec:"Geometry factors"});
+  f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode measures walls directly. Also feeds the drywall hang auto-quantity (walls + ceiling ≈ 3.4× floor in quick mode)."});
+  f.push({path:"trimFactor",label:"Baseboard LF per floor sq ft",info:"Quick-totals only. Estimates BASEBOARD linear feet from floor area (~0.33). Door and window casings are added separately from their counts, so don't pad this for them."});
+  f.push({path:"doorCasingLF",label:"Casing LF per door",info:"Linear feet of casing added to trim per door — ≈17 LF covers both legs and the head on one side of a standard 3-0 × 6-8 door. Bump up if you typically case both sides in the same scope."});
+  f.push({path:"windowCasingLF",label:"Casing LF per window",info:"Linear feet of casing added to trim per window — ≈14 LF suits a typical 3×5 window including stool and apron. Adjust for picture-frame or oversized windows."});
   f.push({sec:"Labor production rates (at standard difficulty)"});
   const LI={walls:"Finished FLOOR sq ft painted per hour, 2-coat baseline (the coats selector scales from there). ~56/hr matches your 0.018 hrs/sq ft quick rule; your table's range was 45–65.",
     ceilings:"Ceiling sq ft painted per hour, 1-coat baseline. The ceiling coats selector scales this up. Table range: 70–100.",
@@ -1322,7 +1330,7 @@ function bindEditor(){
   $("qFloor")?.addEventListener("input",e=>{est.quick.floor=e.target.value;save();refreshTotals();});
   $("addRoomBtn")?.addEventListener("click",()=>{
     est.rooms=est.rooms||[];
-    est.rooms.push({id:Date.now(),name:"",l:"",w:"",h:8,doors:""});
+    est.rooms.push({id:Date.now(),name:"",l:"",w:"",h:8,doors:"",wins:""});
     save();render();
   });
   document.querySelectorAll("[data-delroom]").forEach(el=>{
