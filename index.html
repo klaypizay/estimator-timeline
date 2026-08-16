@@ -148,9 +148,11 @@ const SCOPES={
   doors:    {label:"Doors — paint",             trade:"paint",  lo:1.25, mid:1.5,  hi:1.75, unit:"door"},
   popcorn:  {label:"Popcorn ceiling removal",   trade:"paint",  lo:.010, mid:.015, hi:.020, unit:"ceiling sq ft"},
   wallpaper:{label:"Wallpaper removal",         trade:"paint",  lo:.010, mid:.017, hi:.025, unit:"wall sq ft"},
-  hang:     {label:"Drywall — hang",            trade:"drywall",lo:.0025,mid:.0033,hi:.0040,unit:"sq ft"},
-  finish:   {label:"Drywall — finish (L4)",     trade:"drywall",lo:.006, mid:.008, hi:.010, unit:"sq ft"},
-  prime:    {label:"Drywall — prime",           trade:"drywall",lo:.002, mid:.0028,hi:.0035,unit:"sq ft"},
+  // drywall rates are solo-residential (stored internally as hrs/sq ft = 1/production rate);
+  // the original 250-450 sq ft/hr style numbers are commercial-crew rates on open walls
+  hang:     {label:"Drywall — hang",            trade:"drywall",lo:1/200,mid:1/150,hi:1/100,unit:"sq ft"},
+  finish:   {label:"Drywall — finish (L4)",     trade:"drywall",lo:1/120,mid:1/80, hi:1/60, unit:"sq ft"},
+  prime:    {label:"Drywall — prime",           trade:"drywall",lo:1/400,mid:1/300,hi:1/250,unit:"sq ft"},
   patch:    {label:"Drywall — patch / repair",  trade:"drywall",lo:.05,  mid:.15,  hi:.30,  unit:"repair sq ft"},
 };
 const SCOPE_ORDER=["walls","ceilings","trim","doors","popcorn","wallpaper","hang","finish","prime","patch"];
@@ -162,7 +164,7 @@ function defaultSettings(){return{
   company:"",
   ratePaint:65, rateDrywall:70, hrsDay:8, markup:20,
   wallFactor:2.4, trimFactor:0.33,
-  labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:.0033,finish:.008,prime:.0028,patch:.15},
+  labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:1/150,finish:1/80,prime:1/300,patch:.15},
   // wallCoatCov/ceilCoatCov = wall/ceiling sq ft one gallon covers in a SINGLE coat
   cov:{wallCoatCov:350,ceilCoatCov:350,trimGal:500,doorsGal:15,sheet:32,waste:10,screwSheets:7,tapeSheets:25,mudSqft:425,primeGal:300,removerGal:750,maskFactor:1.15},
   price:{wallPaint:45,ceilPaint:32,trimPaint:55,primer:28,sheet:16,screws:9,tape:7,mud:18,bead:5,remover:25,maskSqft:.05,patchSqft:1.5},
@@ -171,6 +173,17 @@ function defaultSettings(){return{
   reply:"Thanks for reaching out — I'd love to help with your project. Based on my current schedule, I could start as early as {date}. Let me know if that works for you and we'll get it on the books.",
   replyNow:"Thanks for reaching out — I'd love to help with your project. I'm available now and can get started right away. Let me know and we'll lock in a date.",
 };}
+
+// 2026-08 recalibration: drywall defaults moved from commercial-crew production
+// rates to solo-residential ones. Stored settings still equal to the old
+// defaults get bumped; anything the user customized is left untouched.
+const RECAL_LABOR={hang:{old:.0033,now:1/150},finish:{old:.008,now:1/80},prime:{old:.0028,now:1/300}};
+function migrateSettings(s){
+  for(const k in RECAL_LABOR){
+    if(s.labor&&Math.abs(s.labor[k]-RECAL_LABOR[k].old)<1e-9)s.labor[k]=RECAL_LABOR[k].now;
+  }
+  return s;
+}
 
 // ── State ──
 let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,
@@ -206,7 +219,7 @@ function load(){
     const s=localStorage.getItem(STORAGE_KEY);
     if(s){
       const d=JSON.parse(s);
-      data.settings=deepMerge(defaultSettings(),d.settings||{});
+      data.settings=migrateSettings(deepMerge(defaultSettings(),d.settings||{}));
       data.estimates=d.estimates||[];data.projects=d.projects||[];
       data.nextId=d.nextId||1;data.nextEstId=d.nextEstId||1;
       data.pendingDeletes=d.pendingDeletes||{estimates:[],projects:[]};
@@ -299,7 +312,7 @@ async function pullFromCloud({force=false}={}){
     if(!us){
       await syncToCloud(); // first sync for this account — seed the cloud from local
     }else if(force||localEmpty){
-      data.settings=deepMerge(defaultSettings(),us.settings||{});
+      data.settings=migrateSettings(deepMerge(defaultSettings(),us.settings||{}));
       data.nextId=us.next_id||1;data.nextEstId=us.next_est_id||1;
       data.estimates=(estRes.data||[]).map(r=>r.data).sort((a,b)=>a.id-b.id);
       data.projects=(projRes.data||[]).map(r=>r.data);
@@ -1009,18 +1022,21 @@ function settingsFields(){
   f.push({sec:"Quick-mode factors"});
   f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode ignores this and measures walls directly."});
   f.push({path:"trimFactor",label:"Trim LF per floor sq ft",info:"Quick-totals only. Estimates baseboard/casing linear feet from floor area. ~0.33 is a rough average; bump up for lots of windows, doors, or crown."});
-  f.push({sec:"Labor rates (hrs/unit at standard difficulty)"});
-  const LI={walls:"Hours to paint one finished FLOOR sq ft (the rate already assumes a 2-coat baseline; the coats selector scales from there).",
-    ceilings:"Hours to paint one ceiling sq ft, 1-coat baseline. The ceiling coats selector scales this up.",
-    trim:"Hours per linear foot of trim (baseboard, casing, crown).",
-    doors:"Hours per door slab incl. both faces and edges.",
-    popcorn:"Hours per ceiling sq ft to scrape/remove popcorn texture.",
-    wallpaper:"Hours per wall sq ft to strip old wallpaper and prep.",
-    hang:"Hours per drywall sq ft to hang board (screws in, not finished).",
-    finish:"Hours per drywall sq ft to tape and finish to Level 4. The L5 option multiplies this.",
-    prime:"Hours per drywall sq ft to prime new board.",
-    patch:"Hours per repair sq ft — wide range; small holes are much slower per sq ft than big open areas."};
-  SCOPE_ORDER.forEach(k=>f.push({path:"labor."+k,label:`${SCOPES[k].label} — hrs / ${SCOPES[k].unit}`,info:LI[k]}));
+  f.push({sec:"Labor production rates (at standard difficulty)"});
+  const LI={walls:"Finished FLOOR sq ft painted per hour, 2-coat baseline (the coats selector scales from there). ~56/hr matches your 0.018 hrs/sq ft quick rule; your table's range was 45–65.",
+    ceilings:"Ceiling sq ft painted per hour, 1-coat baseline. The ceiling coats selector scales this up. Table range: 70–100.",
+    trim:"Linear feet of trim painted per hour (baseboard, casing, crown). Table range: 50–70.",
+    doors:"Hours per door slab, both faces and edges. Kept as hours-per-door — 1.5 hrs/door is easier to reason about than 0.67 doors/hr.",
+    popcorn:"Ceiling sq ft of popcorn scraped per hour. Table range: 50–100.",
+    wallpaper:"Wall sq ft of wallpaper stripped and prepped per hour. Table range: 40–100.",
+    hang:"Drywall sq ft hung per hour, solo — measuring, cutting, screwing. 100–200 is realistic for residential rooms; 250–450 style numbers are commercial crews on big open walls.",
+    finish:"Sq ft taped and finished to Level 4 per HANDS-ON hour — tape, all coats, and sanding combined. Drying time between coats isn't labor: a room's ~6 finishing hours really spread across 3–4 calendar days.",
+    prime:"Drywall sq ft primed per hour.",
+    patch:"Repair sq ft per hour — small patches are far slower per sq ft than big open areas (3–20 range)."};
+  SCOPE_ORDER.forEach(k=>{
+    const perHr=k!=="doors"; // every area/linear rate reads naturally as units/hr; doors stay hrs each
+    f.push({path:"labor."+k,label:perHr?`${SCOPES[k].label} — ${SCOPES[k].unit} / hr`:`${SCOPES[k].label} — hrs / door`,info:LI[k],inv:perHr?1:0});
+  });
   f.push({sec:"Coats, texture & finish modifiers"});
   f.push({path:"mult.extraCoatWall",label:"Wall extra-coat labor factor",info:"How much each coat above/below 2 changes wall painting labor. 0.35 → 3 coats is 1.35× and 1 coat is 0.65× the 2-coat rate."});
   f.push({path:"mult.extraCoatCeil",label:"Ceiling extra-coat labor factor",info:"Same idea for ceilings, measured from a 1-coat baseline. 0.6 → 2 coats is 1.6× and 3 coats is 2.2× the 1-coat rate."});
@@ -1073,9 +1089,11 @@ function settingsHTML(){
         if(f.sec)return`<div class="eyebrow" style="margin:20px 0 10px">${f.sec.toUpperCase()}</div>`;
         const v=getPath(data.settings,f.path);
         const str=f.text||f.area;
+        // inv fields are stored as hrs/unit but shown/edited as units-per-hour
+        const shown=str?esc(v):(f.inv?+(1/v).toPrecision(3):v);
         const control=f.area
           ?`<textarea data-set="${f.path}" data-str="1" rows="3">${esc(v)}</textarea>`
-          :`<input type="${f.text?"text":"number"}" ${f.text?"":'step="any" inputmode="decimal"'} ${str?'data-str="1"':""} data-set="${f.path}" value="${str?esc(v):v}"/>`;
+          :`<input type="${f.text?"text":"number"}" ${f.text?"":'step="any" inputmode="decimal"'} ${str?'data-str="1"':""} ${f.inv?'data-inv="1"':""} data-set="${f.path}" value="${shown}"/>`;
         return`<div class="field" style="margin-bottom:12px">
           <div class="set-labelrow"><label style="margin:0">${f.label}</label>${f.info?`<button class="info-btn" type="button" data-infobtn>i</button>`:""}</div>
           ${f.info?`<div class="set-desc" style="display:none">${f.info}</div>`:""}
@@ -1139,6 +1157,11 @@ function bindSettings(){
   $("setDoneBtn")?.addEventListener("click",closeSettings);
   document.querySelectorAll("[data-set]").forEach(el=>{
     el.addEventListener("input",()=>{
+      if(el.dataset.inv){
+        const n=num(el.value);
+        if(n>0){setPath(data.settings,el.dataset.set,1/n);save();} // typed units/hr, stored hrs/unit
+        return;
+      }
       setPath(data.settings,el.dataset.set,el.dataset.str?el.value:num(el.value));
       save();
     });
