@@ -445,12 +445,16 @@ function compute(est){
   const base=laborPaint+laborDry+matCharge;
   const marginPct=S.profitMargin??0;
   const profit=base*marginPct/100;
-  const total=base+profit;
+  // custom line items are charged at face value — no margin/markup stacked on
+  // top, and negative amounts work as discounts
+  const custom=(est.custom||[]).map(i=>({desc:i.desc,amt:num(i.amt)}));
+  const customT=custom.reduce((s,i)=>s+i.amt,0);
+  const total=base+profit+customT;
   const laborDays=totalHrs>0?Math.max(1,Math.ceil(totalHrs/S.hrsDay)):0;
   // mud has to dry between coats — extra calendar days on site, not billable hours
   const dryDays=laborDays&&rows.some(r=>(r.k==="finish"||r.k==="patch")&&r.h>0)?(S.dryDays||0):0;
   const days=laborDays+dryDays;
-  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,totalHrs,total,laborDays,dryDays,days,
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,custom,customT,totalHrs,total,laborDays,dryDays,days,
     prep,prepT,ovh,pickup,daily,cleanup,prodHrs};
 }
 function quoteLines(est){
@@ -484,6 +488,8 @@ function quoteLines(est){
   const prepAmt=((c.prep.paint+c.ovh.paint)*S.ratePaint+(c.prep.drywall+c.ovh.drywall)*S.rateDrywall)*qm;
   if(prepAmt>0)lines.push({desc:"Site preparation, protection & cleanup",amt:Math.round(prepAmt)});
   if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge*qm)});
+  // custom items at face value; desc is user input so escape it here
+  c.custom.forEach(i=>{if(i.amt||i.desc)lines.push({desc:esc(i.desc||"Additional item"),amt:Math.round(i.amt)});});
   return{lines,total:lines.reduce((s,l)=>s+l.amt,0),c};
 }
 function newEstimate(){
@@ -802,6 +808,7 @@ function totalsHTML(c){
     ${c.mats.map(m=>`<div class="tot-row"><span>${m.label} · ${m.qty%1?m.qty.toFixed(1):fmtQ(m.qty)} ${m.unit}</span><span class="amt">${fmt$(m.cost)}</span></div>`).join("")}
     ${c.matCost>0?`<div class="tot-row tot-sub"><span>Materials + <input class="tot-edit" type="text" inputmode="decimal" data-tset="markup" value="${S.markup}"/>% markup</span><span class="amt">${fmt$(c.matCharge)}</span></div>`:""}
     ${c.base>0?`<div class="tot-row tot-sub"><span>Profit margin · <input class="tot-edit" type="text" inputmode="decimal" data-tset="profitMargin" value="${c.marginPct}"/>% on cost</span><span class="amt">${fmt$(c.profit)}</span></div>`:""}
+    ${c.custom.length?`<div class="eyebrow" style="margin-top:16px">CUSTOM ITEMS</div>`+c.custom.map(i=>`<div class="tot-row"><span>${esc(i.desc||"Custom item")}</span><span class="amt">${fmt$(i.amt)}</span></div>`).join(""):""}
     <div class="tot-total">
       <span class="mono" style="font-size:11px;letter-spacing:.1em">TOTAL</span>
       <span style="font-size:26px;font-weight:300">${fmt$(c.total)}</span>
@@ -896,6 +903,17 @@ function editorHTML(){
       ${on?scopeFieldsHTML(est,c,k):""}
     </div>`;
   }).join("")}
+  <div class="section-label"><span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">CUSTOM LINE ITEMS</span></div>
+  <div style="padding:0 16px">
+    ${(est.custom||[]).map(i=>`
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <input type="text" data-cid="${i.id}" data-cf="desc" value="${esc(i.desc)}" placeholder="e.g. Haul away old carpet" style="flex:2"/>
+      <input type="number" step="any" inputmode="decimal" data-cid="${i.id}" data-cf="amt" value="${i.amt}" placeholder="$" style="flex:0 0 90px"/>
+      <button class="back-btn" data-delcustom="${i.id}" style="color:#C0392B;font-size:14px;padding:4px 6px">✕</button>
+    </div>`).join("")}
+    <button class="btn-secondary" id="addCustomBtn" style="margin-bottom:0">+ ADD LINE ITEM</button>
+    <div class="field-hint">charged exactly as entered — margin & markup are not applied · negative amount = discount</div>
+  </div>
   <div class="section-label"><span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">TOTALS</span></div>
   <div id="totalsPanel">${totalsHTML(c)}</div>
   <div class="est-actions">
@@ -1361,6 +1379,26 @@ function bindEditor(){
       if(!r)return;
       r[el.dataset.f]=el.value;
       save();refreshTotals();
+    });
+  });
+  $("addCustomBtn")?.addEventListener("click",()=>{
+    est.custom=est.custom||[];
+    est.custom.push({id:Date.now(),desc:"",amt:""});
+    save();render();
+    setTimeout(()=>document.querySelector(`[data-cid="${est.custom[est.custom.length-1].id}"][data-cf="desc"]`)?.focus(),50);
+  });
+  document.querySelectorAll("[data-cid]").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const it=(est.custom||[]).find(x=>x.id===+el.dataset.cid);
+      if(!it)return;
+      it[el.dataset.cf]=el.value;
+      save();refreshTotals();
+    });
+  });
+  document.querySelectorAll("[data-delcustom]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      est.custom=(est.custom||[]).filter(x=>x.id!==+el.dataset.delcustom);
+      save();render();
     });
   });
   // chip groups that only affect pricing (not which fields show) update in place
