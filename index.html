@@ -168,6 +168,10 @@ function defaultSettings(){return{
   ratePaint:65, rateDrywall:70, hrsDay:8, dryDays:2, markup:20, profitMargin:80,
   wallFactor:2.4, trimFactor:0.33,
   labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:1/150,finish:1/80,prime:1/300,patch:.15},
+  // site prep: per-scope rates scale with the same quantities as the work
+  // (masking is per sq ft, not per coat); pickup/daily/cleanup are job overhead
+  prep:{walls:1/250,ceilings:1/333,trim:1/167,doors:.2,popcorn:1/200,wallpaper:1/333,hang:1/667,finish:1/667,prime:1/1000,patch:1/20,
+    pickupHrs:1.5,dailySetupHrs:.5,cleanupHrs:1},
   // wallCoatCov/ceilCoatCov = wall/ceiling sq ft one gallon covers in a SINGLE coat
   cov:{wallCoatCov:350,ceilCoatCov:350,trimGal:500,doorsGal:15,sheet:32,waste:10,screwSheets:7,tapeSheets:25,mudSqft:425,primeGal:300,removerGal:750,maskFactor:1.15},
   price:{wallPaint:45,ceilPaint:32,trimPaint:55,primer:28,sheet:16,screws:9,tape:7,mud:18,bead:5,remover:25,maskSqft:.05,patchSqft:1.5},
@@ -376,6 +380,31 @@ function compute(est){
     rows.push({k,label:SCOPES[k].label,qty,unit:SCOPES[k].unit,h,trade:SCOPES[k].trade});
     hrs[SCOPES[k].trade]+=h;
   });
+  // site prep & protection: scales with each scope's quantity (masking a room
+  // is per sq ft, not per coat) and with difficulty (furnished = slower)
+  const P=S.prep||{};
+  const prep={paint:0,drywall:0};
+  SCOPE_ORDER.forEach(k=>{
+    if(!est.scopes[k])return;
+    prep[SCOPES[k].trade]+=q[SCOPE_QTY[k]]*(P[k]||0)*diffFactor(k,diff);
+  });
+  const prodHrs=hrs.paint+hrs.drywall;
+  const prepT=prep.paint+prep.drywall;
+  // per-job overhead: materials pickup + final cleanup are flat; daily
+  // setup/teardown scales with the day count; all split across trades in
+  // proportion to their share of hands-on hours
+  const ovh={paint:0,drywall:0};
+  let pickup=0,daily=0,cleanup=0;
+  if(prodHrs>0){
+    pickup=P.pickupHrs||0;cleanup=P.cleanupHrs||0;
+    const prelim=prodHrs+prepT+pickup+cleanup;
+    daily=(P.dailySetupHrs||0)*Math.max(1,Math.ceil(prelim/S.hrsDay));
+    const ovhTotal=pickup+cleanup+daily;
+    const paintShare=(hrs.paint+prep.paint)/(prodHrs+prepT);
+    ovh.paint=ovhTotal*paintShare;ovh.drywall=ovhTotal*(1-paintShare);
+  }
+  hrs.paint+=prep.paint+ovh.paint;
+  hrs.drywall+=prep.drywall+ovh.drywall;
   // materials
   const mats=[];
   const add=(label,qty,unit,price,trade)=>{if(qty>0)mats.push({label,qty,unit,price,cost:qty*price,trade});};
@@ -415,7 +444,8 @@ function compute(est){
   // mud has to dry between coats — extra calendar days on site, not billable hours
   const dryDays=laborDays&&rows.some(r=>(r.k==="finish"||r.k==="patch")&&r.h>0)?(S.dryDays||0):0;
   const days=laborDays+dryDays;
-  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,totalHrs,total,laborDays,dryDays,days};
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,totalHrs,total,laborDays,dryDays,days,
+    prep,prepT,ovh,pickup,daily,cleanup,prodHrs};
 }
 function quoteLines(est){
   const S=data.settings,c=compute(est),lines=[];
@@ -443,7 +473,11 @@ function quoteLines(est){
     const m=1+(S.profitMargin??0)/100;
     lines.push({desc,amt:Math.round(r.h*rate*m)});
   });
-  if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge*(1+(S.profitMargin??0)/100))});
+  // prep + overhead billed as one professional line, valued at trade rates
+  const qm=1+(S.profitMargin??0)/100;
+  const prepAmt=((c.prep.paint+c.ovh.paint)*S.ratePaint+(c.prep.drywall+c.ovh.drywall)*S.rateDrywall)*qm;
+  if(prepAmt>0)lines.push({desc:"Site preparation, protection & cleanup",amt:Math.round(prepAmt)});
+  if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge*qm)});
   return{lines,total:lines.reduce((s,l)=>s+l.amt,0),c};
 }
 function newEstimate(){
@@ -750,6 +784,10 @@ function totalsHTML(c){
   <div style="margin:0 16px 10px;background:#EDE9E2;border-radius:14px;border:1px solid #D5CFC4;padding:16px">
     <div class="eyebrow">LABOR</div>
     ${c.rows.map(r=>`<div class="tot-row"><span>${r.label} · ${fmtQ(r.qty)} ${r.unit}</span><span class="amt">${r.h.toFixed(1)}h</span></div>`).join("")}
+    ${c.prepT>0?`<div class="tot-row"><span>Site prep & protection · masking, taping, plates</span><span class="amt">${c.prepT.toFixed(1)}h</span></div>`:""}
+    ${c.pickup>0?`<div class="tot-row"><span>Materials pickup & staging</span><span class="amt">${c.pickup.toFixed(1)}h</span></div>`:""}
+    ${c.daily>0?`<div class="tot-row"><span>Daily setup / teardown</span><span class="amt">${c.daily.toFixed(1)}h</span></div>`:""}
+    ${c.cleanup>0?`<div class="tot-row"><span>Final cleanup & haul-off</span><span class="amt">${c.cleanup.toFixed(1)}h</span></div>`:""}
     ${c.hrs.paint>0?`<div class="tot-row tot-sub"><span>Paint · ${c.hrs.paint.toFixed(1)}h × ${fmt$(S.ratePaint)}/hr</span><span class="amt">${fmt$(c.laborPaint)}</span></div>`:""}
     ${c.hrs.drywall>0?`<div class="tot-row${c.hrs.paint>0?"":" tot-sub"}"><span>Drywall · ${c.hrs.drywall.toFixed(1)}h × ${fmt$(S.rateDrywall)}/hr</span><span class="amt">${fmt$(c.laborDry)}</span></div>`:""}
     <div class="eyebrow" style="margin-top:16px">MATERIALS</div>
@@ -1056,6 +1094,27 @@ function settingsFields(){
     const perHr=k!=="doors"; // every area/linear rate reads naturally as units/hr; doors stay hrs each
     f.push({path:"labor."+k,label:perHr?`${SCOPES[k].label} — ${SCOPES[k].unit} / hr`:`${SCOPES[k].label} — hrs / door`,info:LI[k],inv:perHr?1:0});
   });
+  f.push({sec:"Site prep & overhead"});
+  const PI={walls:"Floor sq ft of wall-area prep per hour — masking floors/furniture, pulling outlet & switch plates, taping trim edges, spot-filling nail holes. Per sq ft (not a % of paint time) because you mask once whether it's 1 coat or 3.",
+    ceilings:"Ceiling sq ft prepped per hour — masking walls below the cut line, covering floors, bagging fixtures and fans.",
+    trim:"Trim LF prepped per hour — caulking gaps, filling nail holes, scuff-sanding, taping off. Trim prep is real work; often as slow as the painting itself.",
+    doors:"Hours per door — pulling & rehanging (or masking) hinges, knobs, and latches.",
+    popcorn:"Ceiling sq ft tented per hour — full plastic on walls and floors before any scraping starts.",
+    wallpaper:"Wall sq ft protected per hour — floor cover, outlet masking, containing stripper solution.",
+    hang:"Board sq ft staged per hour — unloading the truck, carrying sheets to the room. Slow this down for upstairs carries or tight access.",
+    finish:"Sq ft of dust protection per hour — plastic barriers and floor cover before mud and sanding.",
+    prime:"Sq ft covered per hour — drop cloths and quick masking before priming.",
+    patch:"Repair sq ft of setup per hour — drop cloth, dust control, protecting surroundings per patch. Small patches carry outsized setup.",
+    pickupHrs:"Flat hours per job for materials acquisition — ordering, the store run, loading, unloading, staging on site.",
+    dailySetupHrs:"Hours per work day for tool load-in/out and opening/closing the site. Multiplied by the job's work-day count.",
+    cleanupHrs:"Flat hours per job for final cleanup, debris haul-off, and the walkthrough."};
+  SCOPE_ORDER.forEach(k=>{
+    const perHr=k!=="doors";
+    f.push({path:"prep."+k,label:perHr?`Prep: ${SCOPES[k].label} — ${SCOPES[k].unit} / hr`:`Prep: ${SCOPES[k].label} — hrs / door`,info:PI[k],inv:perHr?1:0});
+  });
+  f.push({path:"prep.pickupHrs",label:"Materials pickup & staging — hrs / job",info:PI.pickupHrs});
+  f.push({path:"prep.dailySetupHrs",label:"Daily setup / teardown — hrs / day",info:PI.dailySetupHrs});
+  f.push({path:"prep.cleanupHrs",label:"Final cleanup & haul-off — hrs / job",info:PI.cleanupHrs});
   f.push({sec:"Coats, texture & finish modifiers"});
   f.push({path:"mult.extraCoatWall",label:"Wall extra-coat labor factor",info:"How much each coat above/below 2 changes wall painting labor. 0.35 → 3 coats is 1.35× and 1 coat is 0.65× the 2-coat rate."});
   f.push({path:"mult.extraCoatCeil",label:"Ceiling extra-coat labor factor",info:"Same idea for ceilings, measured from a 1-coat baseline. 0.6 → 2 coats is 1.6× and 3 coats is 2.2× the 1-coat rate."});
