@@ -26,9 +26,12 @@
   .set-sec:first-of-type .set-sec-head{border-top:none;margin-top:0;}
   .set-sec-body{padding-bottom:4px;}
   .calc-display{background:#EDE9E2;border:1px solid #D5CFC4;border-radius:10px;padding:12px 14px;margin-bottom:12px;text-align:right;}
-  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-  .calc-btn{font-family:'Azeret Mono',monospace;font-size:16px;padding:13px 0;border-radius:10px;border:1px solid #C8C2B8;background:#F5F1EB;color:#1A1510;cursor:pointer;}
+  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .calc-btn{font-family:'Azeret Mono',monospace;font-size:14px;padding:9px 0;border-radius:8px;border:1px solid #C8C2B8;background:#F5F1EB;color:#1A1510;cursor:pointer;}
   .calc-btn.op{background:#EDE9E2;}
+  /* right offset keeps the fab inside the centered 480px app column on wide screens */
+  .calc-fab{position:fixed;bottom:18px;right:max(16px,calc(50% - 224px));width:52px;height:52px;border-radius:50%;background:#1A1510;color:#F5F1EB;border:none;font-size:20px;font-family:'Azeret Mono',monospace;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);z-index:40;}
+  .calc-panel{position:fixed;bottom:80px;right:max(16px,calc(50% - 224px));width:min(272px,calc(100vw - 32px));background:#F5F1EB;border:1px solid #D5CFC4;border-radius:14px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.25);z-index:40;}
   .mono{font-family:'Azeret Mono','Courier New',monospace;}
   .eyebrow{font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8A847A;margin-bottom:6px;}
   .headline{font-size:28px;font-weight:300;line-height:1.15;color:#1A1510;}
@@ -557,7 +560,6 @@ function tabbarHTML(){
   return`<div class="tabbar no-print">
     <button class="tab-btn${ui.tab==="est"?" active":""}" id="tabEst">ESTIMATES</button>
     <button class="tab-btn${ui.tab==="tl"?" active":""}" id="tabTl">TIMELINE</button>
-    <button class="gear-btn" id="calcBtn" title="Calculator">∑</button>
     <button class="gear-btn" id="gearBtn" title="Settings">⚙</button>
     ${auth.session?`<span class="sync-dot" id="syncDot" title="${esc(dotTitle)}" style="background:${dotColor}"></span>
     <button class="gear-btn" id="signOutBtn" title="Sign out (${esc(email)})">⎋</button>`:""}
@@ -1257,27 +1259,26 @@ function safeCalc(expr){
 }
 function fmtCalc(v){return(+v.toFixed(4)).toLocaleString("en-US");}
 function calcHTML(){
-  if(!ui.calcOpen)return"";
+  // floats bottom-right on the estimate editor only; no backdrop, so the
+  // estimate fields stay visible and tappable while doing math
+  if(!(ui.tab==="est"&&ui.view==="editor"))return"";
   const v=safeCalc(ui.calcExpr);
   return`
-  <div class="overlay" id="calcOverlay"></div>
-  <div class="sheet" style="max-width:380px">
-    <div class="sheet-handle"></div>
-    <div class="sheet-body">
-      <div class="sheet-title">CALCULATOR — QUICK SQ FT MATH</div>
-      <div class="calc-display mono">
-        <div id="calcExpr" style="font-size:16px;min-height:22px;word-break:break-all">${esc(ui.calcExpr)||"&nbsp;"}</div>
-        <div id="calcResult" style="font-size:24px;font-weight:300">${v===null?"&nbsp;":"= "+fmtCalc(v)}</div>
-      </div>
-      <div class="calc-grid">
-        ${["7","8","9","÷","4","5","6","×","1","2","3","−","0",".","(",")","C","⌫","+","="].map(k=>`<button class="calc-btn${/^[0-9.]$/.test(k)?"":" op"}" data-ck="${k}">${k}</button>`).join("")}
-      </div>
-      <div class="field-hint" style="margin-top:10px">room sq ft = length × width · chain rooms with + (e.g. 12.5×14 + 6×4)</div>
+  ${ui.calcOpen?`
+  <div class="calc-panel">
+    <div class="calc-display mono" style="padding:8px 10px;margin-bottom:8px">
+      <div id="calcExpr" style="font-size:13px;min-height:18px;word-break:break-all">${esc(ui.calcExpr)||"&nbsp;"}</div>
+      <div id="calcResult" style="font-size:20px;font-weight:300">${v===null?"&nbsp;":"= "+fmtCalc(v)}</div>
     </div>
-  </div>`;
+    <div class="calc-grid">
+      ${["7","8","9","÷","4","5","6","×","1","2","3","−","0",".","(",")","C","⌫","+","="].map(k=>`<button class="calc-btn${/^[0-9.]$/.test(k)?"":" op"}" data-ck="${k}">${k}</button>`).join("")}
+    </div>
+    <div class="field-hint" style="margin-top:8px">length × width · chain rooms with +</div>
+  </div>`:""}
+  <button class="calc-fab" id="calcBtn" title="Calculator">${ui.calcOpen?"✕":"∑"}</button>`;
 }
 function bindCalc(){
-  $("calcOverlay")?.addEventListener("click",()=>{ui.calcOpen=false;render();});
+  $("calcBtn")?.addEventListener("click",()=>{ui.calcOpen=!ui.calcOpen;render();});
   document.querySelectorAll("[data-ck]").forEach(el=>{
     el.addEventListener("click",()=>{
       const k=el.dataset.ck;
@@ -1285,7 +1286,7 @@ function bindCalc(){
       else if(k==="⌫")ui.calcExpr=ui.calcExpr.slice(0,-1);
       else if(k==="="){const v=safeCalc(ui.calcExpr);if(v!==null)ui.calcExpr=String(+v.toFixed(4));}
       else ui.calcExpr+=k;
-      // update the display in place — no re-render, keeps the sheet steady
+      // update the display in place — no re-render, keeps the panel steady
       const v=safeCalc(ui.calcExpr);
       $("calcExpr").innerHTML=esc(ui.calcExpr)||"&nbsp;";
       $("calcResult").innerHTML=v===null?"&nbsp;":"= "+fmtCalc(v);
@@ -1332,7 +1333,6 @@ function bindShared(){
   $("tabEst")?.addEventListener("click",()=>{ui.tab="est";render();});
   $("tabTl")?.addEventListener("click",()=>{ui.tab="tl";render();});
   $("gearBtn")?.addEventListener("click",()=>{ui.settingsOpen=true;render();});
-  $("calcBtn")?.addEventListener("click",()=>{ui.calcOpen=true;render();});
   $("signOutBtn")?.addEventListener("click",async()=>{
     if(!confirm("Sign out of JobBook? Your data stays saved in the cloud — signing back in will bring it back."))return;
     await sb.auth.signOut();
