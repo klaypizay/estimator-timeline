@@ -165,7 +165,7 @@ const SCOPE_QTY={walls:"floorSqft",ceilings:"ceilSqft",trim:"trimLF",doors:"door
 
 function defaultSettings(){return{
   company:"",
-  ratePaint:65, rateDrywall:70, hrsDay:8, dryDays:2, markup:20,
+  ratePaint:65, rateDrywall:70, hrsDay:8, dryDays:2, markup:20, profitMargin:80,
   wallFactor:2.4, trimFactor:0.33,
   labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:1/150,finish:1/80,prime:1/300,patch:.15},
   // wallCoatCov/ceilCoatCov = wall/ceiling sq ft one gallon covers in a SINGLE coat
@@ -406,12 +406,16 @@ function compute(est){
   const matCost=mats.reduce((s,m)=>s+m.cost,0);
   const matCharge=matCost*(1+S.markup/100);
   const totalHrs=hrs.paint+hrs.drywall;
-  const total=laborPaint+laborDry+matCharge;
+  // company profit is a markup on the whole job (labor + charged materials)
+  const base=laborPaint+laborDry+matCharge;
+  const marginPct=S.profitMargin??0;
+  const profit=base*marginPct/100;
+  const total=base+profit;
   const laborDays=totalHrs>0?Math.max(1,Math.ceil(totalHrs/S.hrsDay)):0;
   // mud has to dry between coats — extra calendar days on site, not billable hours
   const dryDays=laborDays&&rows.some(r=>(r.k==="finish"||r.k==="patch")&&r.h>0)?(S.dryDays||0):0;
   const days=laborDays+dryDays;
-  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,totalHrs,total,laborDays,dryDays,days};
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,totalHrs,total,laborDays,dryDays,days};
 }
 function quoteLines(est){
   const S=data.settings,c=compute(est),lines=[];
@@ -434,14 +438,17 @@ function quoteLines(est){
       case"patch":desc=`Drywall patch & repair — ${n} sq ft`;break;
     }
     const rate=r.trade==="paint"?S.ratePaint:S.rateDrywall;
-    lines.push({desc,amt:Math.round(r.h*rate)});
+    // profit margin is folded proportionally into every customer-facing line —
+    // it must never appear as its own "profit" row on a quote
+    const m=1+(S.profitMargin??0)/100;
+    lines.push({desc,amt:Math.round(r.h*rate*m)});
   });
-  if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge)});
+  if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge*(1+(S.profitMargin??0)/100))});
   return{lines,total:lines.reduce((s,l)=>s+l.amt,0),c};
 }
 function newEstimate(){
   return{id:data.nextEstId++,name:"",mode:"quick",quick:{floor:""},rooms:[],
-    scopes:{walls:1,ceilings:1,trim:1,doors:1,popcorn:0,wallpaper:0,hang:0,finish:0,prime:0,patch:0},
+    scopes:{walls:0,ceilings:0,trim:0,doors:0,popcorn:0,wallpaper:0,hang:0,finish:0,prime:0,patch:0},
     wallCoats:2,ceilCoats:1,finishLevel:4,texture:"smooth",
     q:{},manual:{},difficulty:"std",created:toISO(today),projectId:null};
 }
@@ -749,6 +756,7 @@ function totalsHTML(c){
     ${c.mats.length===0?`<div class="tot-row"><span style="font-style:italic">none</span></div>`:""}
     ${c.mats.map(m=>`<div class="tot-row"><span>${m.label} · ${m.qty%1?m.qty.toFixed(1):fmtQ(m.qty)} ${m.unit}</span><span class="amt">${fmt$(m.cost)}</span></div>`).join("")}
     ${c.matCost>0?`<div class="tot-row tot-sub"><span>Materials + ${S.markup}% markup</span><span class="amt">${fmt$(c.matCharge)}</span></div>`:""}
+    ${c.profit>0?`<div class="tot-row tot-sub"><span>Profit margin · ${c.marginPct}% on cost</span><span class="amt">${fmt$(c.profit)}</span></div>`:""}
     <div class="tot-total">
       <span class="mono" style="font-size:11px;letter-spacing:.1em">TOTAL</span>
       <span style="font-size:26px;font-weight:300">${fmt$(c.total)}</span>
@@ -1029,6 +1037,7 @@ function settingsFields(){
   f.push({path:"hrsDay",label:"Work hours per day",info:"Productive hours you bill in a day. Used only to convert total labor hours into a day count for the timeline (hours ÷ this)."});
   f.push({path:"dryDays",label:"Mud drying days",info:"Extra calendar days added to a job's duration when it includes drywall finishing or patching — coats have to dry between hands-on sessions. Affects the day count and timeline duration only, never the price. Set 0 to disable (e.g. if you run hot mud same-day)."});
   f.push({path:"markup",label:"Materials markup (%)",info:"Added on top of your raw material cost to get the customer materials charge. 20 means materials are billed at 1.20× cost. Labor is not marked up here — that’s baked into your hourly rate."});
+  f.push({path:"profitMargin",label:"Profit margin (%)",info:"Company profit added on top of the whole job — labor plus materials (including their markup). 80 means every job is billed at 1.8× cost, which works out to ≈44% margin of the final price. It's folded proportionally into the customer quote's line items, never shown as its own line. Set 0 if your hourly rates already have profit built in."});
   f.push({sec:"Quick-mode factors"});
   f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode ignores this and measures walls directly."});
   f.push({path:"trimFactor",label:"Trim LF per floor sq ft",info:"Quick-totals only. Estimates baseboard/casing linear feet from floor area. ~0.33 is a rough average; bump up for lots of windows, doors, or crown."});
