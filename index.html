@@ -25,6 +25,10 @@
   .set-sec-head{width:100%;display:flex;justify-content:space-between;align-items:center;background:transparent;border:none;border-top:1px solid #D5CFC4;padding:14px 2px 12px;cursor:pointer;margin-top:2px;}
   .set-sec:first-of-type .set-sec-head{border-top:none;margin-top:0;}
   .set-sec-body{padding-bottom:4px;}
+  .calc-display{background:#EDE9E2;border:1px solid #D5CFC4;border-radius:10px;padding:12px 14px;margin-bottom:12px;text-align:right;}
+  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .calc-btn{font-family:'Azeret Mono',monospace;font-size:16px;padding:13px 0;border-radius:10px;border:1px solid #C8C2B8;background:#F5F1EB;color:#1A1510;cursor:pointer;}
+  .calc-btn.op{background:#EDE9E2;}
   .mono{font-family:'Azeret Mono','Courier New',monospace;}
   .eyebrow{font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8A847A;margin-bottom:6px;}
   .headline{font-size:28px;font-weight:300;line-height:1.15;color:#1A1510;}
@@ -195,7 +199,7 @@ function migrateSettings(s){
 }
 
 // ── State ──
-let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,setSecOpen:{Business:true},
+let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,setSecOpen:{Business:true},calcOpen:false,calcExpr:"",
   tsheet:null,tform:{name:"",duration:14,confidence:75,value:""},
   buffer:7,showPadding:false,forecastDays:30,expandBuffer:false,
   dragIndex:null,dragOver:null,dragReady:false,copied:false};
@@ -386,6 +390,10 @@ function compute(est){
     rows.push({k,label:SCOPES[k].label,qty,unit:SCOPES[k].unit,h,trade:SCOPES[k].trade});
     hrs[SCOPES[k].trade]+=h;
   });
+  // ad-hoc labor items are real hours: billed at the trade rate, margined like
+  // all labor, and counted toward days and overhead
+  const customLabor=(est.customLabor||[]).map(i=>({desc:i.desc,hrs:Math.max(0,num(i.hrs)),trade:i.trade==="drywall"?"drywall":"paint"}));
+  customLabor.forEach(i=>{hrs[i.trade]+=i.hrs;});
   // site prep & protection: scales with each scope's quantity (masking a room
   // is per sq ft, not per coat) and with difficulty (furnished = slower)
   const P=S.prep||{};
@@ -454,7 +462,7 @@ function compute(est){
   // mud has to dry between coats — extra calendar days on site, not billable hours
   const dryDays=laborDays&&rows.some(r=>(r.k==="finish"||r.k==="patch")&&r.h>0)?(S.dryDays||0):0;
   const days=laborDays+dryDays;
-  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,custom,customT,totalHrs,total,laborDays,dryDays,days,
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,base,profit,marginPct,custom,customT,customLabor,totalHrs,total,laborDays,dryDays,days,
     prep,prepT,ovh,pickup,daily,cleanup,prodHrs};
 }
 function quoteLines(est){
@@ -487,6 +495,7 @@ function quoteLines(est){
   const qm=1+(S.profitMargin??0)/100;
   const prepAmt=((c.prep.paint+c.ovh.paint)*S.ratePaint+(c.prep.drywall+c.ovh.drywall)*S.rateDrywall)*qm;
   if(prepAmt>0)lines.push({desc:"Site preparation, protection & cleanup",amt:Math.round(prepAmt)});
+  c.customLabor.forEach(i=>{if(i.hrs>0)lines.push({desc:esc(i.desc||"Additional labor"),amt:Math.round(i.hrs*(i.trade==="drywall"?S.rateDrywall:S.ratePaint)*qm)});});
   if(c.matCharge>0)lines.push({desc:"Materials & supplies",amt:Math.round(c.matCharge*qm)});
   // custom items at face value; desc is user input so escape it here
   c.custom.forEach(i=>{if(i.amt||i.desc)lines.push({desc:esc(i.desc||"Additional item"),amt:Math.round(i.amt)});});
@@ -548,6 +557,7 @@ function tabbarHTML(){
   return`<div class="tabbar no-print">
     <button class="tab-btn${ui.tab==="est"?" active":""}" id="tabEst">ESTIMATES</button>
     <button class="tab-btn${ui.tab==="tl"?" active":""}" id="tabTl">TIMELINE</button>
+    <button class="gear-btn" id="calcBtn" title="Calculator">∑</button>
     <button class="gear-btn" id="gearBtn" title="Settings">⚙</button>
     ${auth.session?`<span class="sync-dot" id="syncDot" title="${esc(dotTitle)}" style="background:${dotColor}"></span>
     <button class="gear-btn" id="signOutBtn" title="Sign out (${esc(email)})">⎋</button>`:""}
@@ -801,6 +811,7 @@ function totalsHTML(c){
     ${c.pickup>0?`<div class="tot-row"><span>Materials pickup & staging</span><span class="amt">${c.pickup.toFixed(1)}h</span></div>`:""}
     ${c.daily>0?`<div class="tot-row"><span>Daily setup / teardown</span><span class="amt">${c.daily.toFixed(1)}h</span></div>`:""}
     ${c.cleanup>0?`<div class="tot-row"><span>Final cleanup & haul-off</span><span class="amt">${c.cleanup.toFixed(1)}h</span></div>`:""}
+    ${c.customLabor.filter(i=>i.hrs>0||i.desc).map(i=>`<div class="tot-row"><span>${esc(i.desc||"Custom labor")} · ${i.trade}</span><span class="amt">${i.hrs.toFixed(1)}h</span></div>`).join("")}
     ${c.hrs.paint>0?`<div class="tot-row tot-sub"><span>Paint · ${c.hrs.paint.toFixed(1)}h × $<input class="tot-edit" type="text" inputmode="decimal" data-tset="ratePaint" value="${S.ratePaint}"/>/hr</span><span class="amt">${fmt$(c.laborPaint)}</span></div>`:""}
     ${c.hrs.drywall>0?`<div class="tot-row${c.hrs.paint>0?"":" tot-sub"}"><span>Drywall · ${c.hrs.drywall.toFixed(1)}h × $<input class="tot-edit" type="text" inputmode="decimal" data-tset="rateDrywall" value="${S.rateDrywall}"/>/hr</span><span class="amt">${fmt$(c.laborDry)}</span></div>`:""}
     <div class="eyebrow" style="margin-top:16px">MATERIALS</div>
@@ -911,8 +922,18 @@ function editorHTML(){
       <input type="number" step="any" inputmode="decimal" data-cid="${i.id}" data-cf="amt" value="${i.amt}" placeholder="$" style="flex:0 0 90px"/>
       <button class="back-btn" data-delcustom="${i.id}" style="color:#C0392B;font-size:14px;padding:4px 6px">✕</button>
     </div>`).join("")}
-    <button class="btn-secondary" id="addCustomBtn" style="margin-bottom:0">+ ADD LINE ITEM</button>
-    <div class="field-hint">charged exactly as entered — margin & markup are not applied · negative amount = discount</div>
+    ${(est.customLabor||[]).map(i=>`
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <input type="text" data-clid="${i.id}" data-clf="desc" value="${esc(i.desc)}" placeholder="e.g. Move furniture" style="flex:2"/>
+      <input type="number" step="any" inputmode="decimal" data-clid="${i.id}" data-clf="hrs" value="${i.hrs}" placeholder="hrs" style="flex:0 0 64px"/>
+      <button class="chip on" data-cltrade="${i.id}" style="flex:0 0 auto">${i.trade==="drywall"?"DRYWALL":"PAINT"}</button>
+      <button class="back-btn" data-delclabor="${i.id}" style="color:#C0392B;font-size:14px;padding:4px 6px">✕</button>
+    </div>`).join("")}
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" id="addCustomBtn" style="margin-bottom:0">+ $ ITEM</button>
+      <button class="btn-secondary" id="addCustomLaborBtn" style="margin-bottom:0">+ LABOR ITEM</button>
+    </div>
+    <div class="field-hint">$ items charged exactly as entered, no margin/markup (negative = discount) · labor items bill hours at the trade rate, take margin, and add to the schedule — tap the trade chip to switch paint/drywall</div>
   </div>
   <div class="section-label"><span class="mono" style="font-size:10px;letter-spacing:.12em;color:#8A847A">TOTALS</span></div>
   <div id="totalsPanel">${totalsHTML(c)}</div>
@@ -1226,6 +1247,52 @@ function settingsHTML(){
   </div>`;
 }
 
+// ══════════════════════ CALCULATOR ══════════════════════
+// button-built expressions only (digits + − × ÷ . parens), so the character
+// whitelist below makes the Function() evaluation safe
+function safeCalc(expr){
+  const s=String(expr||"").replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-");
+  if(!s.trim()||!/^[\d+\-*/().\s]+$/.test(s))return null;
+  try{const v=new Function('"use strict";return('+s+')')();return typeof v==="number"&&isFinite(v)?v:null}catch{return null}
+}
+function fmtCalc(v){return(+v.toFixed(4)).toLocaleString("en-US");}
+function calcHTML(){
+  if(!ui.calcOpen)return"";
+  const v=safeCalc(ui.calcExpr);
+  return`
+  <div class="overlay" id="calcOverlay"></div>
+  <div class="sheet" style="max-width:380px">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body">
+      <div class="sheet-title">CALCULATOR — QUICK SQ FT MATH</div>
+      <div class="calc-display mono">
+        <div id="calcExpr" style="font-size:16px;min-height:22px;word-break:break-all">${esc(ui.calcExpr)||"&nbsp;"}</div>
+        <div id="calcResult" style="font-size:24px;font-weight:300">${v===null?"&nbsp;":"= "+fmtCalc(v)}</div>
+      </div>
+      <div class="calc-grid">
+        ${["7","8","9","÷","4","5","6","×","1","2","3","−","0",".","(",")","C","⌫","+","="].map(k=>`<button class="calc-btn${/^[0-9.]$/.test(k)?"":" op"}" data-ck="${k}">${k}</button>`).join("")}
+      </div>
+      <div class="field-hint" style="margin-top:10px">room sq ft = length × width · chain rooms with + (e.g. 12.5×14 + 6×4)</div>
+    </div>
+  </div>`;
+}
+function bindCalc(){
+  $("calcOverlay")?.addEventListener("click",()=>{ui.calcOpen=false;render();});
+  document.querySelectorAll("[data-ck]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const k=el.dataset.ck;
+      if(k==="C")ui.calcExpr="";
+      else if(k==="⌫")ui.calcExpr=ui.calcExpr.slice(0,-1);
+      else if(k==="="){const v=safeCalc(ui.calcExpr);if(v!==null)ui.calcExpr=String(+v.toFixed(4));}
+      else ui.calcExpr+=k;
+      // update the display in place — no re-render, keeps the sheet steady
+      const v=safeCalc(ui.calcExpr);
+      $("calcExpr").innerHTML=esc(ui.calcExpr)||"&nbsp;";
+      $("calcResult").innerHTML=v===null?"&nbsp;":"= "+fmtCalc(v);
+    });
+  });
+}
+
 // ══════════════════════ MAIN RENDER + BINDING ══════════════════════
 function render(){
   // Auth gate: unless the Supabase library failed to load entirely (in which
@@ -1249,7 +1316,7 @@ function render(){
     body=timelineHTML();
   }
   const offlineBanner=auth.libFailed?`<div class="field-hint no-print" style="text-align:center;padding:8px 20px;color:#C0392B">Cloud sync unavailable (offline) — working from local cache only</div>`:"";
-  $("app").innerHTML=tabbarHTML()+offlineBanner+`<div>`+body+`</div>`+settingsHTML();
+  $("app").innerHTML=tabbarHTML()+offlineBanner+`<div>`+body+`</div>`+settingsHTML()+calcHTML();
   bindShared();
   if(ui.tab==="est"){
     if(ui.view==="editor")bindEditor();
@@ -1257,6 +1324,7 @@ function render(){
     else bindEstList();
   }else bindTimeline();
   bindSettings();
+  bindCalc();
   updateSyncIndicator();
 }
 
@@ -1264,6 +1332,7 @@ function bindShared(){
   $("tabEst")?.addEventListener("click",()=>{ui.tab="est";render();});
   $("tabTl")?.addEventListener("click",()=>{ui.tab="tl";render();});
   $("gearBtn")?.addEventListener("click",()=>{ui.settingsOpen=true;render();});
+  $("calcBtn")?.addEventListener("click",()=>{ui.calcOpen=true;render();});
   $("signOutBtn")?.addEventListener("click",async()=>{
     if(!confirm("Sign out of JobBook? Your data stays saved in the cloud — signing back in will bring it back."))return;
     await sb.auth.signOut();
@@ -1398,6 +1467,34 @@ function bindEditor(){
   document.querySelectorAll("[data-delcustom]").forEach(el=>{
     el.addEventListener("click",()=>{
       est.custom=(est.custom||[]).filter(x=>x.id!==+el.dataset.delcustom);
+      save();render();
+    });
+  });
+  $("addCustomLaborBtn")?.addEventListener("click",()=>{
+    est.customLabor=est.customLabor||[];
+    est.customLabor.push({id:Date.now(),desc:"",hrs:"",trade:"paint"});
+    save();render();
+    setTimeout(()=>document.querySelector(`[data-clid="${est.customLabor[est.customLabor.length-1].id}"][data-clf="desc"]`)?.focus(),50);
+  });
+  document.querySelectorAll("[data-clid]").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const it=(est.customLabor||[]).find(x=>x.id===+el.dataset.clid);
+      if(!it)return;
+      it[el.dataset.clf]=el.value;
+      save();refreshTotals();
+    });
+  });
+  document.querySelectorAll("[data-cltrade]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const it=(est.customLabor||[]).find(x=>x.id===+el.dataset.cltrade);
+      if(!it)return;
+      it.trade=it.trade==="drywall"?"paint":"drywall";
+      save();render();
+    });
+  });
+  document.querySelectorAll("[data-delclabor]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      est.customLabor=(est.customLabor||[]).filter(x=>x.id!==+el.dataset.delclabor);
       save();render();
     });
   });
