@@ -22,6 +22,9 @@
   .info-btn{width:16px;height:16px;flex-shrink:0;border-radius:50%;border:1px solid #B7AE9F;background:transparent;color:#8A847A;font-family:'Azeret Mono',monospace;font-size:10px;font-style:italic;line-height:1;cursor:pointer;padding:0;}
   .info-btn.on{background:#1A1510;color:#F5F1EB;border-color:#1A1510;}
   .set-desc{font-family:'Newsreader',serif;font-size:13px;line-height:1.45;color:#6B6560;background:#EDE9E2;border-left:2px solid #C8C2B8;border-radius:0 6px 6px 0;padding:8px 11px;margin-bottom:8px;}
+  .set-sec-head{width:100%;display:flex;justify-content:space-between;align-items:center;background:transparent;border:none;border-top:1px solid #D5CFC4;padding:14px 2px 12px;cursor:pointer;margin-top:2px;}
+  .set-sec:first-of-type .set-sec-head{border-top:none;margin-top:0;}
+  .set-sec-body{padding-bottom:4px;}
   .mono{font-family:'Azeret Mono','Courier New',monospace;}
   .eyebrow{font-family:'Azeret Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8A847A;margin-bottom:6px;}
   .headline{font-size:28px;font-weight:300;line-height:1.15;color:#1A1510;}
@@ -162,7 +165,7 @@ const SCOPE_QTY={walls:"floorSqft",ceilings:"ceilSqft",trim:"trimLF",doors:"door
 
 function defaultSettings(){return{
   company:"",
-  ratePaint:65, rateDrywall:70, hrsDay:8, markup:20,
+  ratePaint:65, rateDrywall:70, hrsDay:8, dryDays:2, markup:20,
   wallFactor:2.4, trimFactor:0.33,
   labor:{walls:.018,ceilings:.012,trim:.018,doors:1.5,popcorn:.015,wallpaper:.017,hang:1/150,finish:1/80,prime:1/300,patch:.15},
   // wallCoatCov/ceilCoatCov = wall/ceiling sq ft one gallon covers in a SINGLE coat
@@ -186,7 +189,7 @@ function migrateSettings(s){
 }
 
 // ── State ──
-let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,
+let ui={tab:"est",view:"list",editId:null,quoteId:null,settingsOpen:false,setSecOpen:{Business:true},
   tsheet:null,tform:{name:"",duration:14,confidence:75,value:""},
   buffer:7,showPadding:false,forecastDays:30,expandBuffer:false,
   dragIndex:null,dragOver:null,dragReady:false,copied:false};
@@ -404,8 +407,11 @@ function compute(est){
   const matCharge=matCost*(1+S.markup/100);
   const totalHrs=hrs.paint+hrs.drywall;
   const total=laborPaint+laborDry+matCharge;
-  const days=totalHrs>0?Math.max(1,Math.ceil(totalHrs/S.hrsDay)):0;
-  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,totalHrs,total,days};
+  const laborDays=totalHrs>0?Math.max(1,Math.ceil(totalHrs/S.hrsDay)):0;
+  // mud has to dry between coats — extra calendar days on site, not billable hours
+  const dryDays=laborDays&&rows.some(r=>(r.k==="finish"||r.k==="patch")&&r.h>0)?(S.dryDays||0):0;
+  const days=laborDays+dryDays;
+  return{q,rows,hrs,mats,laborPaint,laborDry,matCost,matCharge,totalHrs,total,laborDays,dryDays,days};
 }
 function quoteLines(est){
   const S=data.settings,c=compute(est),lines=[];
@@ -747,7 +753,7 @@ function totalsHTML(c){
       <span class="mono" style="font-size:11px;letter-spacing:.1em">TOTAL</span>
       <span style="font-size:26px;font-weight:300">${fmt$(c.total)}</span>
     </div>
-    <div class="field-hint" style="margin-top:6px">${c.totalHrs.toFixed(1)} labor hrs ≈ ${c.days} day${c.days===1?"":"s"} @ ${S.hrsDay}h/day</div>
+    <div class="field-hint" style="margin-top:6px">${c.totalHrs.toFixed(1)} labor hrs ≈ ${c.laborDays} work day${c.laborDays===1?"":"s"} @ ${S.hrsDay}h/day${c.dryDays?` + ${c.dryDays} mud-drying day${c.dryDays===1?"":"s"} = ${c.days} days on site`:""}</div>
   </div>`;
 }
 function editorHTML(){
@@ -1018,6 +1024,7 @@ function settingsFields(){
   f.push({path:"ratePaint",label:"Paint labor rate ($/hr)",info:"Your billable rate for all painting scopes (walls, ceilings, trim, doors, removals). Multiplied by the painting hours the estimate computes."});
   f.push({path:"rateDrywall",label:"Drywall labor rate ($/hr)",info:"Your billable rate for all drywall scopes (hang, finish, prime, patch). Kept separate so you can price drywall higher than paint."});
   f.push({path:"hrsDay",label:"Work hours per day",info:"Productive hours you bill in a day. Used only to convert total labor hours into a day count for the timeline (hours ÷ this)."});
+  f.push({path:"dryDays",label:"Mud drying days",info:"Extra calendar days added to a job's duration when it includes drywall finishing or patching — coats have to dry between hands-on sessions. Affects the day count and timeline duration only, never the price. Set 0 to disable (e.g. if you run hot mud same-day)."});
   f.push({path:"markup",label:"Materials markup (%)",info:"Added on top of your raw material cost to get the customer materials charge. 20 means materials are billed at 1.20× cost. Labor is not marked up here — that’s baked into your hourly rate."});
   f.push({sec:"Quick-mode factors"});
   f.push({path:"wallFactor",label:"Wall sq ft per floor sq ft",info:"Quick-totals only. Converts finished floor area into paintable wall area. ~2.4 suits typical 8–9 ft ceilings; raise for tall walls or choppy floor plans. Room-by-room mode ignores this and measures walls directly."});
@@ -1079,25 +1086,40 @@ function getPath(o,p){return p.split(".").reduce((x,k)=>x&&x[k],o);}
 function setPath(o,p,v){const ks=p.split(".");const last=ks.pop();let x=o;ks.forEach(k=>x=x[k]);x[last]=v;}
 function settingsHTML(){
   if(!ui.settingsOpen)return"";
+  // group the flat field list into collapsible sections at each {sec} marker
+  const sections=[];
+  settingsFields().forEach(f=>{
+    if(f.sec)sections.push({title:f.sec,fields:[]});
+    else sections[sections.length-1].fields.push(f);
+  });
+  const renderField=f=>{
+    const v=getPath(data.settings,f.path);
+    const str=f.text||f.area;
+    // inv fields are stored as hrs/unit but shown/edited as units-per-hour
+    const shown=str?esc(v):(f.inv?+(1/v).toPrecision(3):v);
+    const control=f.area
+      ?`<textarea data-set="${f.path}" data-str="1" rows="3">${esc(v)}</textarea>`
+      :`<input type="${f.text?"text":"number"}" ${f.text?"":'step="any" inputmode="decimal"'} ${str?'data-str="1"':""} ${f.inv?'data-inv="1"':""} data-set="${f.path}" value="${shown}"/>`;
+    return`<div class="field" style="margin-bottom:12px">
+      <div class="set-labelrow"><label style="margin:0">${f.label}</label>${f.info?`<button class="info-btn" type="button" data-infobtn>i</button>`:""}</div>
+      ${f.info?`<div class="set-desc" style="display:none">${f.info}</div>`:""}
+      ${control}
+    </div>`;
+  };
   return`
   <div class="overlay" id="setOverlay"></div>
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-body">
       <div class="sheet-title">SETTINGS — saved as you type</div>
-      ${settingsFields().map(f=>{
-        if(f.sec)return`<div class="eyebrow" style="margin:20px 0 10px">${f.sec.toUpperCase()}</div>`;
-        const v=getPath(data.settings,f.path);
-        const str=f.text||f.area;
-        // inv fields are stored as hrs/unit but shown/edited as units-per-hour
-        const shown=str?esc(v):(f.inv?+(1/v).toPrecision(3):v);
-        const control=f.area
-          ?`<textarea data-set="${f.path}" data-str="1" rows="3">${esc(v)}</textarea>`
-          :`<input type="${f.text?"text":"number"}" ${f.text?"":'step="any" inputmode="decimal"'} ${str?'data-str="1"':""} ${f.inv?'data-inv="1"':""} data-set="${f.path}" value="${shown}"/>`;
-        return`<div class="field" style="margin-bottom:12px">
-          <div class="set-labelrow"><label style="margin:0">${f.label}</label>${f.info?`<button class="info-btn" type="button" data-infobtn>i</button>`:""}</div>
-          ${f.info?`<div class="set-desc" style="display:none">${f.info}</div>`:""}
-          ${control}
+      ${sections.map(sec=>{
+        const open=ui.setSecOpen[sec.title]===true;
+        return`<div class="set-sec">
+          <button type="button" class="set-sec-head" data-sec="${esc(sec.title)}">
+            <span class="eyebrow" style="margin:0">${sec.title.toUpperCase()} · ${sec.fields.length}</span>
+            <span class="mono set-sec-arrow" style="font-size:10px;color:#8A847A">${open?"▲":"▼"}</span>
+          </button>
+          <div class="set-sec-body" style="display:${open?"block":"none"}">${sec.fields.map(renderField).join("")}</div>
         </div>`;
       }).join("")}
       <button class="btn-primary" id="setDoneBtn" style="margin-top:10px">DONE</button>
@@ -1173,6 +1195,17 @@ function bindSettings(){
       const show=desc.style.display==="none";
       desc.style.display=show?"block":"none";
       el.classList.toggle("on",show);
+    });
+  });
+  // section headers toggle in place (no re-render) so scroll position and
+  // any in-progress typing elsewhere in the sheet are preserved
+  document.querySelectorAll("[data-sec]").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const body=el.parentElement.querySelector(".set-sec-body");
+      const open=body.style.display==="none";
+      body.style.display=open?"block":"none";
+      el.querySelector(".set-sec-arrow").textContent=open?"▲":"▼";
+      ui.setSecOpen[el.dataset.sec]=open;
     });
   });
 }
